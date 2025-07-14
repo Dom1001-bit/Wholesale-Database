@@ -476,7 +476,7 @@
 
         function ItemCard({ item, onCardClick }) {
             const price = parseFloat(item.askingPrice);
-            const priceText = !isNaN(price) && price > 0 ? '$' + price.toFixed(2) : 'N/A';
+            const priceText = !isNaN(price) && price >= 0 ? '$' + price.toFixed(2) : 'N/A';
             const placeholderImg = 'https://i.imgur.com/IUBzxFv.jpeg';
             return (
                 <div onClick={onCardClick} className="bg-gray-800 rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-700 cursor-pointer hover:border-indigo-500 transition-all">
@@ -508,7 +508,7 @@
         
         function ItemModal({ item, onClose }) {
             const price = parseFloat(item.askingPrice);
-            const priceText = !isNaN(price) && price > 0 ? '$' + price.toFixed(2) : 'N/A';
+            const priceText = !isNaN(price) && price >= 0 ? '$' + price.toFixed(2) : 'N/A';
             const placeholderImg = 'https://i.imgur.com/IUBzxFv.jpeg';
             const imageUrl = item.imageUrl || placeholderImg;
 
@@ -563,7 +563,8 @@
 
         // --- API Docs Component ---
         function ApiDocs() {
-            const API_URL = "https://wholesale-api-421345206834.us-central1.run.app"; // Replace with your DEPLOYED App Script URL
+            // UPDATED: New API URL from Cloud Run
+            const API_URL = "https://wholesale-api-421345206834.us-central1.run.app";
 
             return (
                 <div className="bg-gray-800/80 border border-gray-700 p-6 rounded-lg text-gray-300">
@@ -600,7 +601,7 @@
         "current_page": 1,
         "total_pages": 6,
         "per_page": 250,
-        "rate_limit_remaining": 999
+        "rate_limit_remaining": 99
     },
     "data": [
         {
@@ -617,7 +618,7 @@
                     </code></pre>
 
                     <h3 className="text-xl font-semibold text-white mt-8 mb-2">Rate Limits</h3>
-                    <p className="mb-4">You may call this endpoint up to 1,000 times per 24-hour period per token. Additional requests will receive a `429 Too Many Requests` error.</p>
+                    <p className="mb-4">You may call this endpoint up to 100 times per 24-hour period per token. Additional requests will receive a `429 Too Many Requests` error.</p>
                     
                     <h3 className="text-xl font-semibold text-white mt-8 mb-2">Example Request (cURL)</h3>
                     <pre><code>
@@ -636,12 +637,11 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             const [error, setError] = useState('');
             const [showKey, setShowKey] = useState(false);
             const [logs, setLogs] = useState([]);
-            const [usage, setUsage] = useState({ count: 0, limit: 1000 });
+            const [usage, setUsage] = useState({ count: 0, limit: 100 }); // UPDATED: Limit set to 100
 
             useEffect(() => {
                 const fetchApiKeyData = async () => {
                     if (!user) return;
-                    // setLoading(true); // Removed to prevent loop, loading is handled once.
                     setError('');
                     try {
                         const userRef = db.collection('users').doc(user.uid);
@@ -673,7 +673,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                 };
 
                 fetchApiKeyData();
-            }, [user]); // Dependency array is correct now.
+            }, [user]);
 
             const generateNewKey = async () => {
                 if (!confirm("Are you sure? This will invalidate your old key immediately.")) return;
@@ -692,7 +692,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                     setApiKey(newKey);
                     setShowKey(true);
                     setLogs([]);
-                    setUsage({ count: 0, limit: 1000 });
+                    setUsage({ count: 0, limit: 100 });
                 } catch (err) {
                     setError('Failed to generate new key. Please try again.');
                     console.error(err);

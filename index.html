@@ -590,7 +590,7 @@
                             <p className="ml-4 mt-1">Returns a paginated list of products. You can filter by SKU or UPC.</p>
                             <ul className="list-disc ml-10 mt-2 space-y-1 text-sm">
                                 <li><code className="text-gray-400">page</code> (optional, default: 1) - The page number to retrieve.</li>
-                                <li><code className="text-gray-400">limit</code> (optional, default: 100, max: 250) - The number of items to return per page.</li>
+                                <li><code className="text-gray-400">limit</code> (optional, default: 250, max: 250) - The number of items to return per page.</li>
                                 <li><code className="text-gray-400">sku</code> (optional) - Filter results for a single product by its SKU.</li>
                                 <li><code className="text-gray-400">upc</code> (optional) - Filter results for a single product by its UPC.</li>
                             </ul>
@@ -605,7 +605,8 @@
         "total": 1287,
         "current_page": 1,
         "total_pages": 6,
-        "per_page": 250
+        "per_page": 250,
+        "rate_limit_remaining": 999
     },
     "data": [
         {
@@ -622,7 +623,7 @@
                     </code></pre>
 
                     <h3 className="text-xl font-semibold text-white mt-8 mb-2">Rate Limits</h3>
-                    <p className="mb-4">The API is subject to standard Google Apps Script and Firebase daily quotas. For a standard account, this is approximately **20,000 calls per day**. Exceeding this limit will result in a `429 Too Many Requests` error until the quota resets.</p>
+                    <p className="mb-4">You may call this endpoint up to 1,000 times per 24-hour period per token. Additional requests will receive a `429 Too Many Requests` error.</p>
                     
                     <h3 className="text-xl font-semibold text-white mt-8 mb-2">Example Request (cURL)</h3>
                     <pre><code>
@@ -640,25 +641,43 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             const [loading, setLoading] = useState(true);
             const [error, setError] = useState('');
             const [showKey, setShowKey] = useState(false);
+            const [logs, setLogs] = useState([]);
+            const [usage, setUsage] = useState({ count: 0, limit: 1000 });
 
             const userRef = db.collection('users').doc(user.uid);
 
-            const fetchApiKey = useCallback(async () => {
+            const fetchApiKeyData = useCallback(async () => {
+                setLoading(true);
                 try {
                     const doc = await userRef.get();
                     if (doc.exists && doc.data().apiKey) {
-                        setApiKey(doc.data().apiKey);
+                        const currentApiKey = doc.data().apiKey;
+                        setApiKey(currentApiKey);
+
+                        // Fetch usage logs
+                        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                        const logsQuery = db.collection('apiLogs')
+                            .where('apiKey', '==', currentApiKey)
+                            .where('timestamp', '>=', twentyFourHoursAgo);
+                        
+                        const logSnapshot = await logsQuery.get();
+                        setUsage(prev => ({ ...prev, count: logSnapshot.size }));
+                        
+                        const recentLogsQuery = logsQuery.orderBy('timestamp', 'desc').limit(10);
+                        const recentLogSnapshot = await recentLogsQuery.get();
+                        setLogs(recentLogSnapshot.docs.map(d => d.data()));
                     }
                 } catch (err) {
-                    setError('Could not fetch API key.');
+                    console.error("Error fetching API data:", err);
+                    setError('Could not fetch API key and usage data.');
                 } finally {
                     setLoading(false);
                 }
             }, [userRef]);
 
             useEffect(() => {
-                fetchApiKey();
-            }, [fetchApiKey]);
+                fetchApiKeyData();
+            }, [fetchApiKeyData]);
 
             const generateNewKey = async () => {
                 if (!confirm("Are you sure? This will invalidate your old key immediately.")) return;
@@ -675,6 +694,8 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                     await db.collection('apiKeys').doc(newKey).set({ userId: user.uid, createdAt: new Date() });
                     setApiKey(newKey);
                     setShowKey(true);
+                    setLogs([]); // Reset logs for new key
+                    setUsage({ count: 0, limit: 1000 }); // Reset usage
                 } catch (err) {
                     setError('Failed to generate new key. Please try again.');
                     console.error(err);
@@ -699,16 +720,40 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                                 </div>
                                 <button onClick={() => setShowKey(!showKey)} title={showKey ? 'Hide key' : 'Show key'} className="p-2 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                                     {showKey ? (
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
-                                        </svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
                                     ) : (
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                        </svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                                     )}
                                 </button>
+                            </div>
+                             <div className="mt-6">
+                                <h3 className="text-lg font-medium text-white">Usage (Last 24 Hours)</h3>
+                                <div className="w-full bg-gray-700 rounded-full h-2.5 mt-2">
+                                    <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${(usage.count / usage.limit) * 100}%` }}></div>
+                                </div>
+                                <p className="text-right text-sm text-gray-400 mt-1">{usage.count} / {usage.limit} calls</p>
+                            </div>
+
+                            <div className="mt-6">
+                                <h3 className="text-lg font-medium text-white mb-2">Recent API Calls</h3>
+                                {logs.length > 0 ? (
+                                    <div className="overflow-x-auto rounded-lg border border-gray-700">
+                                        <table className="min-w-full divide-y divide-gray-700">
+                                            <thead className="bg-gray-900/50">
+                                                <tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Timestamp</th></tr>
+                                            </thead>
+                                            <tbody className="bg-gray-800 divide-y divide-gray-700">
+                                                {logs.map((log, index) => (
+                                                    <tr key={index}>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{new Date(log.timestamp.seconds * 1000).toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <p className="text-gray-500 text-sm">No recent API calls in the last 24 hours.</p>
+                                )}
                             </div>
                             <div className="bg-yellow-900/50 border border-yellow-700 text-yellow-300 text-sm rounded-md p-3 mt-6">
                                 <strong>Warning:</strong> If you generate a new key, your old key will be immediately revoked. Ensure you update any applications using the old key.

@@ -644,41 +644,41 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             const [logs, setLogs] = useState([]);
             const [usage, setUsage] = useState({ count: 0, limit: 1000 });
 
-            const userRef = db.collection('users').doc(user.uid);
-
-            const fetchApiKeyData = useCallback(async () => {
-                setLoading(true);
-                try {
-                    const doc = await userRef.get();
-                    if (doc.exists && doc.data().apiKey) {
-                        const currentApiKey = doc.data().apiKey;
-                        setApiKey(currentApiKey);
-
-                        // Fetch usage logs
-                        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                        const logsQuery = db.collection('apiLogs')
-                            .where('userId', '==', user.uid) // Corrected query
-                            .where('apiKey', '==', currentApiKey)
-                            .where('timestamp', '>=', twentyFourHoursAgo);
-                        
-                        const logSnapshot = await logsQuery.get();
-                        setUsage(prev => ({ ...prev, count: logSnapshot.size }));
-                        
-                        const recentLogsQuery = logsQuery.orderBy('timestamp', 'desc').limit(10);
-                        const recentLogSnapshot = await recentLogsQuery.get();
-                        setLogs(recentLogSnapshot.docs.map(d => d.data()));
-                    }
-                } catch (err) {
-                    console.error("Error fetching API data:", err);
-                    setError('Could not fetch API key and usage data.');
-                } finally {
-                    setLoading(false);
-                }
-            }, [userRef, user.uid]);
-
             useEffect(() => {
+                const fetchApiKeyData = async () => {
+                    setLoading(true);
+                    setError('');
+                    try {
+                        const userRef = db.collection('users').doc(user.uid);
+                        const doc = await userRef.get();
+                        
+                        if (doc.exists && doc.data().apiKey) {
+                            const currentApiKey = doc.data().apiKey;
+                            setApiKey(currentApiKey);
+
+                            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                            const logsQuery = db.collection('apiLogs')
+                                .where('userId', '==', user.uid)
+                                .where('apiKey', '==', currentApiKey)
+                                .where('timestamp', '>=', twentyFourHoursAgo);
+                            
+                            const logSnapshot = await logsQuery.get();
+                            setUsage(prev => ({ ...prev, count: logSnapshot.size }));
+                            
+                            const recentLogsQuery = logsQuery.orderBy('timestamp', 'desc').limit(10);
+                            const recentLogSnapshot = await recentLogsQuery.get();
+                            setLogs(recentLogSnapshot.docs.map(d => d.data()));
+                        }
+                    } catch (err) {
+                        console.error("Error fetching API data:", err);
+                        setError('Could not fetch API key and usage data.');
+                    } finally {
+                        setLoading(false);
+                    }
+                };
+
                 fetchApiKeyData();
-            }, [fetchApiKeyData]);
+            }, [user.uid]);
 
             const generateNewKey = async () => {
                 if (!confirm("Are you sure? This will invalidate your old key immediately.")) return;
@@ -688,6 +688,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                 const newKey = 'wh_live_' + [...Array(32)].map(() => Math.random().toString(36)[2]).join('');
                 
                 try {
+                    const userRef = db.collection('users').doc(user.uid);
                     if(apiKey) {
                         await db.collection('apiKeys').doc(apiKey).delete();
                     }

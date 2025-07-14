@@ -646,6 +646,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
 
             useEffect(() => {
                 const fetchApiKeyData = async () => {
+                    if (!user) return;
                     setLoading(true);
                     setError('');
                     try {
@@ -678,7 +679,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                 };
 
                 fetchApiKeyData();
-            }, [user.uid]);
+            }, [user]); // Corrected dependency array
 
             const generateNewKey = async () => {
                 if (!confirm("Are you sure? This will invalidate your old key immediately.")) return;

@@ -657,6 +657,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                         // Fetch usage logs
                         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
                         const logsQuery = db.collection('apiLogs')
+                            .where('userId', '==', user.uid) // Corrected query
                             .where('apiKey', '==', currentApiKey)
                             .where('timestamp', '>=', twentyFourHoursAgo);
                         
@@ -673,7 +674,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                 } finally {
                     setLoading(false);
                 }
-            }, [userRef]);
+            }, [userRef, user.uid]);
 
             useEffect(() => {
                 fetchApiKeyData();
@@ -694,8 +695,8 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                     await db.collection('apiKeys').doc(newKey).set({ userId: user.uid, createdAt: new Date() });
                     setApiKey(newKey);
                     setShowKey(true);
-                    setLogs([]); // Reset logs for new key
-                    setUsage({ count: 0, limit: 1000 }); // Reset usage
+                    setLogs([]);
+                    setUsage({ count: 0, limit: 1000 });
                 } catch (err) {
                     setError('Failed to generate new key. Please try again.');
                     console.error(err);

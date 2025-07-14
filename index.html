@@ -583,38 +583,51 @@
                     <h3 className="text-xl font-semibold text-white mt-8 mb-2">Base URL</h3>
                     <pre><code>{API_URL}</code></pre>
 
-                    <h3 className="text-xl font-semibold text-white mt-8 mb-2">Endpoints</h3>
+                    <h3 className="text-xl font-semibold text-white mt-8 mb-2">Endpoints & Parameters</h3>
                     <div className="space-y-6">
                         <div>
-                            <p className="font-mono text-lg"><span className="font-bold text-green-400">GET</span> /?products</p>
-                            <p className="ml-4 mt-1">Returns a list of all products.</p>
-                        </div>
-                        <div>
-                            <p className="font-mono text-lg"><span className="font-bold text-green-400">GET</span> /?sku=&#123;sku&#125;</p>
-                            <p className="ml-4 mt-1">Fetches a single product by its SKU.</p>
-                        </div>
-                        <div>
-                            <p className="font-mono text-lg"><span className="font-bold text-green-400">GET</span> /?upc=&#123;upc&#125;</p>
-                            <p className="ml-4 mt-1">Fetches a single product by its UPC.</p>
+                            <p className="font-mono text-lg"><span className="font-bold text-green-400">GET</span> /</p>
+                            <p className="ml-4 mt-1">Returns a paginated list of products. You can filter by SKU or UPC.</p>
+                            <ul className="list-disc ml-10 mt-2 space-y-1 text-sm">
+                                <li><code className="text-gray-400">page</code> (optional, default: 1) - The page number to retrieve.</li>
+                                <li><code className="text-gray-400">limit</code> (optional, default: 100, max: 250) - The number of items to return per page.</li>
+                                <li><code className="text-gray-400">sku</code> (optional) - Filter results for a single product by its SKU.</li>
+                                <li><code className="text-gray-400">upc</code> (optional) - Filter results for a single product by its UPC.</li>
+                            </ul>
                         </div>
                     </div>
 
-                    <h3 className="text-xl font-semibold text-white mt-8 mb-2">Response Object</h3>
-                    <p className="mb-4">All successful requests will return a JSON object or an array of JSON objects with the following structure:</p>
+                    <h3 className="text-xl font-semibold text-white mt-8 mb-2">Response Format</h3>
+                    <p className="mb-4">All successful requests will return a JSON object with `meta` and `data` keys.</p>
                     <pre><code>
 {`{
-    "sku": "12345",
-    "upc": "012345678901",
-    "itemName": "Example Perfume",
-    "brand": "Designer Brand",
-    "availableInventory": 150,
-    "askingPrice": 75.99
+    "meta": {
+        "total": 1287,
+        "current_page": 1,
+        "total_pages": 6,
+        "per_page": 250
+    },
+    "data": [
+        {
+            "sku": "12345",
+            "upc": "012345678901",
+            "itemName": "Example Perfume",
+            "brand": "Designer Brand",
+            "availableInventory": 150,
+            "askingPrice": 75.99
+        },
+        ...
+    ]
 }`}
                     </code></pre>
+
+                    <h3 className="text-xl font-semibold text-white mt-8 mb-2">Rate Limits</h3>
+                    <p className="mb-4">The API is subject to standard Google Apps Script and Firebase daily quotas. For a standard account, this is approximately **20,000 calls per day**. Exceeding this limit will result in a `429 Too Many Requests` error until the quota resets.</p>
                     
                     <h3 className="text-xl font-semibold text-white mt-8 mb-2">Example Request (cURL)</h3>
                     <pre><code>
-{`curl -L -X GET "${API_URL}?sku=12345" \\
+{`# Get page 2 with 50 items per page
+curl -L -X GET "${API_URL}?page=2&limit=50" \\
      -H "Authorization: Bearer YOUR_API_KEY"`}
                     </code></pre>
                 </div>

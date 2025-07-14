@@ -156,14 +156,13 @@
                     if (isLogin) {
                         await auth.signInWithEmailAndPassword(email, password);
                     } else {
-                        // Invite-only check
                         const inviteDoc = await db.collection('invites').doc(email).get();
                         if (!inviteDoc.exists) {
                             throw new Error("This email has not been invited. Please contact support.");
                         }
                         await auth.createUserWithEmailAndPassword(email, password);
                         setMessage('Account created successfully! Please log in.');
-                        setIsLogin(true); // Switch to login view after successful signup
+                        setIsLogin(true);
                     }
                 } catch (err) {
                     setError(err.message);
@@ -216,8 +215,9 @@
             const [currentPage, setCurrentPage] = useState(1);
             const [currentQuery, setCurrentQuery] = useState({ type: 'browse', constraints: [] });
             const [selectedItem, setSelectedItem] = useState(null);
+            const [fullBulkResults, setFullBulkResults] = useState([]);
 
-            const ITEMS_PER_PAGE = 20;
+            const ITEMS_PER_PAGE = 100;
 
             const fetchData = useCallback(async (queryInfo, direction = 'next') => {
                 setLoading(true);
@@ -254,7 +254,7 @@
             useEffect(() => {
                 fetchData({ type: 'browse', constraints: [] });
             }, []);
-
+            
             const handleSearch = (searchTerm, searchType) => {
                 let constraints = [];
                 if (searchType === 'itemName_lowercase') {
@@ -268,6 +268,7 @@
                 setCurrentPage(1);
                 setLastVisibleDoc(null);
                 setFirstVisibleDoc(null);
+                setFullBulkResults([]);
                 fetchData(newQuery);
             };
 
@@ -277,7 +278,96 @@
                 setCurrentPage(1);
                 setLastVisibleDoc(null);
                 setFirstVisibleDoc(null);
+                setFullBulkResults([]);
                 fetchData(newQuery);
+            };
+
+            const handleBulkSearch = async (upcs) => {
+                const upcList = [...new Set(upcs.map(upc => upc.trim()).filter(upc => upc))];
+                if (upcList.length === 0) {
+                    alert("Please paste a list of UPCs.");
+                    return;
+                }
+                if (upcList.length > 100) {
+                    alert("Bulk search is limited to 100 UPCs at a time.");
+                    return;
+                }
+
+                setLoading(true);
+                setError('');
+                setCurrentQuery({ type: 'bulk', constraints: [] });
+                setCurrentPage(1);
+                
+                try {
+                    const chunks = [];
+                    for (let i = 0; i < upcList.length; i += 10) {
+                        chunks.push(upcList.slice(i, i + 10));
+                    }
+
+                    const queryPromises = chunks.map(chunk => 
+                        productsCollection.where('upc', 'in', chunk).get()
+                    );
+                    
+                    const querySnapshots = await Promise.all(queryPromises);
+                    
+                    const allDocs = [];
+                    querySnapshots.forEach(snapshot => {
+                        snapshot.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
+                    });
+                    
+                    const sortedDocs = allDocs.sort((a, b) => a.sku.localeCompare(b.sku));
+                    setItems(sortedDocs);
+                    setFullBulkResults(sortedDocs);
+
+                } catch (err) {
+                    console.error("Firestore bulk query failed:", err);
+                    setError("Could not fetch data for bulk search. " + err.message);
+                    setItems([]);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleExport = () => {
+                let dataToExport = currentQuery.type === 'bulk' ? fullBulkResults : items;
+
+                if (dataToExport.length === 0) {
+                    alert("No data to export.");
+                    return;
+                }
+
+                const headers = ["SKU", "UPC", "Item Name", "Brand", "Available Inventory", "Asking Price"];
+                const rows = dataToExport.map(item => [
+                    item.sku,
+                    `="${item.upc}"`,
+                    item.itemName,
+                    item.brand,
+                    item.availableInventory,
+                    item.askingPrice
+                ]);
+
+                const escapeCell = (cell) => {
+                    const strCell = String(cell === null || cell === undefined ? "" : cell);
+                    if (strCell.includes(',') || strCell.includes('"') || strCell.includes('\n')) {
+                        return `"${strCell.replace(/"/g, '""')}"`;
+                    }
+                    return strCell;
+                };
+
+                let csvContent = [
+                    headers.join(','),
+                    ...rows.map(row => row.map(escapeCell).join(','))
+                ].join('\r\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "wholesale_product_report.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             };
             
             const changePage = (direction) => {
@@ -292,8 +382,17 @@
 
             return (
                 <div>
-                    <SearchControls onSearch={handleSearch} onBrowseAll={handleBrowseAll} />
+                    <SearchControls onSearch={handleSearch} onBrowseAll={handleBrowseAll} onBulkSearch={handleBulkSearch} />
                     {error && <p className="text-red-400 my-4">{error}</p>}
+                    
+                    {items.length > 0 && !loading && (
+                        <div className="flex justify-end mb-4">
+                            <button onClick={handleExport} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">
+                                Export Results to CSV
+                            </button>
+                        </div>
+                    )}
+
                     {loading ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-8">
                             {Array.from({ length: 10 }).map((_, i) => (
@@ -305,10 +404,10 @@
                         </div>
                     ) : items.length > 0 ? (
                         <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-8">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                                 {items.map(item => <ItemCard key={item.id} item={item} onCardClick={() => setSelectedItem(item)} />)}
                             </div>
-                            <PaginationControls currentPage={currentPage} onPageChange={changePage} />
+                            {currentQuery.type !== 'bulk' && <PaginationControls currentPage={currentPage} onPageChange={changePage} />}
                         </>
                     ) : (
                          <div className="text-center py-16 text-gray-500 mt-8">
@@ -321,9 +420,10 @@
             );
         }
         
-        function SearchControls({ onSearch, onBrowseAll }) {
+        function SearchControls({ onSearch, onBrowseAll, onBulkSearch }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [searchType, setSearchType] = useState('upc');
+            const [upcList, setUpcList] = useState('');
 
             const handleSearchClick = () => {
                 if (!searchTerm.trim()) {
@@ -331,6 +431,11 @@
                     return;
                 }
                 onSearch(searchTerm.trim(), searchType);
+            };
+
+            const handleBulkSearchClick = () => {
+                const upcs = upcList.split(/[\n,]/);
+                onBulkSearch(upcs);
             };
 
             return (
@@ -353,6 +458,23 @@
                             <button onClick={handleSearchClick} className="w-full inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700">Search</button>
                             <button onClick={onBrowseAll} className="w-full inline-flex justify-center rounded-md border border-gray-600 bg-gray-700 py-2.5 px-4 text-sm font-medium text-gray-200 shadow-sm hover:bg-gray-600">Browse All</button>
                         </div>
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                        <label htmlFor="upc-list-input" className="block text-sm font-medium text-gray-300 mb-1">Bulk UPC Search</label>
+                        <textarea 
+                            id="upc-list-input" 
+                            rows="4" 
+                            value={upcList}
+                            onChange={e => setUpcList(e.target.value)}
+                            className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" 
+                            placeholder="Paste a list of UPCs, one per line or separated by commas (up to 100)"
+                        ></textarea>
+                        <button 
+                            onClick={handleBulkSearchClick} 
+                            className="mt-2 w-full inline-flex justify-center rounded-md border border-transparent bg-teal-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors"
+                        >
+                            Search UPC List
+                        </button>
                     </div>
                 </div>
             );
@@ -536,7 +658,7 @@
                     await userRef.set({ apiKey: newKey }, { merge: true });
                     await db.collection('apiKeys').doc(newKey).set({ userId: user.uid, createdAt: new Date() });
                     setApiKey(newKey);
-                    setShowKey(true); // Show the new key immediately
+                    setShowKey(true);
                 } catch (err) {
                     setError('Failed to generate new key. Please try again.');
                     console.error(err);

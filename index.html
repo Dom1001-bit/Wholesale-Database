@@ -219,7 +219,7 @@
 
             const ITEMS_PER_PAGE = 100;
 
-            const fetchData = useCallback(async (queryInfo, direction = 'next') => {
+            const fetchData = async (queryInfo, direction = 'next', pageNum = 1) => {
                 setLoading(true);
                 setError('');
                 let query = productsCollection.orderBy('sku').limit(ITEMS_PER_PAGE);
@@ -228,31 +228,36 @@
                     query = query.where(constraint.field, constraint.op, constraint.value);
                 });
 
-                if (direction === 'next' && lastVisibleDoc) {
+                const isNewSearch = pageNum === 1;
+
+                if (direction === 'next' && !isNewSearch && lastVisibleDoc) {
                     query = query.startAfter(lastVisibleDoc);
-                } else if (direction === 'prev' && firstVisibleDoc) {
+                } else if (direction === 'prev' && !isNewSearch && firstVisibleDoc) {
                     query = query.endBefore(firstVisibleDoc).limitToLast(ITEMS_PER_PAGE);
                 }
 
                 try {
                     const snapshot = await query.get();
-                    if (snapshot.empty && currentPage === 1) {
-                        setItems([]);
-                    } else if (!snapshot.empty) {
-                        setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
-                        setFirstVisibleDoc(snapshot.docs[0]);
-                        setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    if (snapshot.empty) {
+                        if(isNewSearch) setItems([]);
+                        return; // No more pages
                     }
+                    
+                    setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
+                    setFirstVisibleDoc(snapshot.docs[0]);
+                    setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    setCurrentPage(pageNum);
+
                 } catch (err) {
                     console.error("Firestore query failed:", err);
                     setError("Could not fetch data from the database. " + err.message);
                 } finally {
                     setLoading(false);
                 }
-            }, [lastVisibleDoc, firstVisibleDoc, currentPage]);
+            };
 
             useEffect(() => {
-                fetchData({ type: 'browse', constraints: [] });
+                fetchData({ type: 'browse', constraints: [] }, 'next', 1);
             }, []);
             
             const handleSearch = (searchTerm, searchType) => {
@@ -265,21 +270,15 @@
                 }
                 const newQuery = { type: 'search', constraints };
                 setCurrentQuery(newQuery);
-                setCurrentPage(1);
-                setLastVisibleDoc(null);
-                setFirstVisibleDoc(null);
                 setFullBulkResults([]);
-                fetchData(newQuery);
+                fetchData(newQuery, 'next', 1);
             };
 
             const handleBrowseAll = () => {
                 const newQuery = { type: 'browse', constraints: [] };
                 setCurrentQuery(newQuery);
-                setCurrentPage(1);
-                setLastVisibleDoc(null);
-                setFirstVisibleDoc(null);
                 setFullBulkResults([]);
-                fetchData(newQuery);
+                fetchData(newQuery, 'next', 1);
             };
 
             const handleBulkSearch = async (upcs) => {
@@ -371,13 +370,8 @@
             };
             
             const changePage = (direction) => {
-                if (direction === 'next') {
-                    setCurrentPage(p => p + 1);
-                    fetchData(currentQuery, 'next');
-                } else if (direction === 'prev' && currentPage > 1) {
-                    setCurrentPage(p => p - 1);
-                    fetchData(currentQuery, 'prev');
-                }
+                const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
+                fetchData(currentQuery, direction, newPage);
             };
 
             return (
@@ -647,7 +641,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             useEffect(() => {
                 const fetchApiKeyData = async () => {
                     if (!user) return;
-                    setLoading(true);
+                    // setLoading(true); // Removed to prevent loop, loading is handled once.
                     setError('');
                     try {
                         const userRef = db.collection('users').doc(user.uid);
@@ -679,7 +673,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                 };
 
                 fetchApiKeyData();
-            }, [user]); // Corrected dependency array
+            }, [user]); // Dependency array is correct now.
 
             const generateNewKey = async () => {
                 if (!confirm("Are you sure? This will invalidate your old key immediately.")) return;

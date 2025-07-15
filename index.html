@@ -48,7 +48,6 @@
 <body class="bg-gray-900 text-gray-200">
     <div id="root"></div>
 
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -225,7 +224,6 @@
                 
                 let orderByField = 'sku'; // Default order
                 if (queryInfo.constraints.length > 0) {
-                    // For inequality filters, Firestore requires the first orderBy to be on the same field.
                     if (queryInfo.constraints[0].op !== '==') {
                        orderByField = queryInfo.constraints[0].field;
                     }
@@ -249,7 +247,7 @@
                     const snapshot = await query.get();
                     if (snapshot.empty) {
                         if(isNewSearch) setItems([]);
-                        return; // No more pages
+                        return;
                     }
                     
                     setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
@@ -272,15 +270,12 @@
             const handleSearch = (searchTerm, searchType) => {
                 let constraints = [];
                 if (searchType === 'itemName_lowercase') {
-                    // This is a "starts-with" search
                     constraints.push({ field: 'itemName_lowercase', op: '>=', value: searchTerm.toLowerCase() });
                     constraints.push({ field: 'itemName_lowercase', op: '<=', value: searchTerm.toLowerCase() + '\uf8ff' });
                 } else if (searchType === 'brand') {
-                    // This is a case-insensitive exact match against a dedicated lowercase field.
                     constraints.push({ field: 'brand_lowercase', op: '==', value: searchTerm.toLowerCase() });
                 }
                 else {
-                    // This handles UPC and SKU which should be exact matches.
                     constraints.push({ field: searchType, op: '==', value: searchTerm });
                 }
                 const newQuery = { type: 'search', constraints };
@@ -302,8 +297,8 @@
                     alert("Please paste a list of UPCs.");
                     return;
                 }
-                if (upcList.length > 100) {
-                    alert("Bulk search is limited to 100 UPCs at a time.");
+                if (upcList.length > 300) {
+                    alert("Bulk search is limited to 300 UPCs at a time.");
                     return;
                 }
 
@@ -476,7 +471,7 @@
                             value={upcList}
                             onChange={e => setUpcList(e.target.value)}
                             className="mt-1 block w-full rounded-md border-gray-600 bg-gray-700 text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" 
-                            placeholder="Paste a list of UPCs, one per line or separated by commas (up to 100)"
+                            placeholder="Paste a list of UPCs, one per line or separated by commas (up to 300)"
                         ></textarea>
                         <button 
                             onClick={handleBulkSearchClick} 
@@ -652,7 +647,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             const [error, setError] = useState('');
             const [showKey, setShowKey] = useState(false);
             const [logs, setLogs] = useState([]);
-            const [usage, setUsage] = useState({ count: 0, limit: 100 }); // UPDATED: Limit set to 100
+            const [usage, setUsage] = useState({ count: 0, limit: 100 });
 
             useEffect(() => {
                 const fetchApiKeyData = async () => {

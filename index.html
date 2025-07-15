@@ -13,16 +13,65 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body { font-family: 'Inter', sans-serif; }
-        .loader { border: 4px solid #4a5568; border-top: 4px solid #4f46e5; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        body { 
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(-45deg, #111827, #1f2937, #374151, #4b5563);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .loader { border: 4px solid #4a5568; border-top: 4px solid #6366f1; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .skeleton-card { background-color: #1f2937; border-radius: 0.5rem; overflow: hidden; border: 1px solid #374151; }
+        
+        /* New Shimmer Skeleton Loader */
+        .skeleton-card {
+            background-color: #1f2937;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 1px solid #374151;
+            position: relative;
+        }
+        .shimmer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+            animation: shimmer-animation 1.5s infinite;
+        }
+        @keyframes shimmer-animation {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
         .skeleton-image { background-color: #374151; height: 12rem; }
         .skeleton-text { background-color: #374151; height: 1rem; margin-bottom: 0.5rem; border-radius: 0.25rem; }
-        @keyframes pulse { 50% { opacity: .5; } }
-        .skeleton-card, .skeleton-image, .skeleton-text { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        .result-card { opacity: 0; transform: translateY(20px); animation: card-fade-in 0.5s forwards; }
+
+        /* Card Fade-in Animation */
+        .result-card { 
+            opacity: 0; 
+            transform: translateY(20px); 
+            animation: card-fade-in 0.5s forwards; 
+        }
         @keyframes card-fade-in { to { opacity: 1; transform: translateY(0); } }
+
+        /* Glassmorphism Panel Style */
+        .glass-panel {
+            background-color: rgba(31, 41, 55, 0.6); /* Semi-transparent background */
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+        .glass-panel:hover {
+            border-color: rgba(99, 102, 241, 0.5);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+        }
+
         .api-key-code {
             background-color: #1f2937;
             border: 1px solid #374151;
@@ -94,17 +143,14 @@
 
             if (loading) {
                 return (
-                    <div className="flex items-center justify-center min-h-screen bg-gray-900">
+                    <div className="flex items-center justify-center min-h-screen">
                         <div className="loader"></div>
                     </div>
                 );
             }
 
             return (
-                <div className="min-h-screen bg-gray-900">
-                    <div style={{ backgroundImage: "url('https://i.imgur.com/lxVZPgf.png')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }}></div>
-                    <div style={{ backgroundColor: "rgba(17, 24, 39, 0.85)", position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1 }}></div>
-                    
+                <div className="min-h-screen">
                     {user ? (
                         <div className="container mx-auto p-4 md:p-8">
                             <header className="flex justify-between items-center mb-6">
@@ -114,14 +160,14 @@
                                 </div>
                                 <div className="flex items-center space-x-4">
                                     <span className="text-gray-400 text-sm">{user.email}</span>
-                                    <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">Logout</button>
+                                    <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors">Logout</button>
                                 </div>
                             </header>
                             <div className="border-b border-gray-700 mb-6">
                                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                                    <button onClick={() => setActiveTab('database')} className={`${activeTab === 'database' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Product Database</button>
-                                    <button onClick={() => setActiveTab('api_docs')} className={`${activeTab === 'api_docs' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>API Documentation</button>
-                                    <button onClick={() => setActiveTab('api_key')} className={`${activeTab === 'api_key' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}>Manage API Key</button>
+                                    <button onClick={() => setActiveTab('database')} className={`${activeTab === 'database' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors`}>Product Database</button>
+                                    <button onClick={() => setActiveTab('api_docs')} className={`${activeTab === 'api_docs' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors`}>API Documentation</button>
+                                    <button onClick={() => setActiveTab('api_key')} className={`${activeTab === 'api_key' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors`}>Manage API Key</button>
                                 </nav>
                             </div>
                             <div>
@@ -173,7 +219,7 @@
             
             return (
                 <div className="flex items-center justify-center min-h-screen">
-                    <div className="w-full max-w-md p-8 space-y-6 bg-gray-800/80 backdrop-blur-sm rounded-xl shadow-lg border border-gray-700">
+                    <div className="w-full max-w-md p-8 space-y-6 glass-panel rounded-xl shadow-lg">
                         <div className="text-center">
                             <img src="https://i.imgur.com/GQya5pg.png" alt="Logo" className="w-20 mx-auto mb-4"/>
                             <h2 className="text-2xl font-bold text-white">{isLogin ? 'Welcome Back' : 'Create Your Account'}</h2>
@@ -190,7 +236,7 @@
                             </div>
                             {error && <p className="text-red-400 text-sm">{error}</p>}
                             {message && <p className="text-green-400 text-sm">{message}</p>}
-                            <button type="submit" disabled={loading} className="w-full py-2.5 px-4 rounded-md border border-transparent bg-indigo-600 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50">
+                            <button type="submit" disabled={loading} className="w-full py-2.5 px-4 rounded-md border border-transparent bg-indigo-600 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
                                 {loading ? <div className="loader mx-auto" style={{width: '20px', height: '20px'}}></div> : (isLogin ? 'Sign In' : 'Sign Up')}
                             </button>
                         </form>
@@ -223,7 +269,7 @@
                 setLoading(true);
                 setError('');
                 
-                let orderByField = 'sku'; // Default order
+                let orderByField = 'sku'; 
                 if (queryInfo.constraints.length > 0) {
                     if (queryInfo.constraints[0].op !== '==') {
                        orderByField = queryInfo.constraints[0].field;
@@ -392,7 +438,7 @@
                     
                     {items.length > 0 && !loading && (
                         <div className="flex justify-end mb-4">
-                            <button onClick={handleExport} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">
+                            <button onClick={handleExport} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors">
                                 Export Results to CSV
                             </button>
                         </div>
@@ -404,13 +450,14 @@
                                 <div key={i} className="skeleton-card">
                                     <div className="skeleton-image"></div>
                                     <div className="p-4"><div className="skeleton-text w-3/4"></div><div className="skeleton-text w-1/2"></div></div>
+                                    <div className="shimmer"></div>
                                 </div>
                             ))}
                         </div>
                     ) : items.length > 0 ? (
                         <>
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                                {items.map(item => <ItemCard key={item.id} item={item} onCardClick={() => setSelectedItem(item)} />)}
+                                {items.map((item, index) => <ItemCard key={item.id} item={item} onCardClick={() => setSelectedItem(item)} style={{ animationDelay: `${index * 50}ms` }} />)}
                             </div>
                             {currentQuery.type !== 'bulk' && <PaginationControls currentPage={currentPage} onPageChange={changePage} />}
                         </>
@@ -444,7 +491,7 @@
             };
 
             return (
-                 <div className="bg-gray-800/70 backdrop-blur-sm p-6 rounded-xl shadow-lg mb-8 border border-gray-700">
+                 <div className="glass-panel p-6 rounded-xl shadow-lg mb-8">
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                         <div className="md:col-span-2">
                             <label htmlFor="search-input" className="block text-sm font-medium text-gray-300 mb-1">Search Term</label>
@@ -460,8 +507,8 @@
                             </select>
                         </div>
                         <div className="md:col-span-2 flex items-center space-x-3">
-                            <button onClick={handleSearchClick} className="w-full inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700">Search</button>
-                            <button onClick={onBrowseAll} className="w-full inline-flex justify-center rounded-md border border-gray-600 bg-gray-700 py-2.5 px-4 text-sm font-medium text-gray-200 shadow-sm hover:bg-gray-600">Browse All</button>
+                            <button onClick={handleSearchClick} className="w-full inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition-all">Search</button>
+                            <button onClick={onBrowseAll} className="w-full inline-flex justify-center rounded-md border border-gray-600 bg-gray-700 py-2.5 px-4 text-sm font-medium text-gray-200 shadow-sm hover:bg-gray-600 transition-all">Browse All</button>
                         </div>
                     </div>
                     <div className="mt-4 pt-4 border-t border-gray-700">
@@ -485,12 +532,12 @@
             );
         }
 
-        function ItemCard({ item, onCardClick }) {
+        function ItemCard({ item, onCardClick, style }) {
             const price = parseFloat(item.askingPrice);
             const priceText = !isNaN(price) && price >= 0 ? '$' + price.toFixed(2) : 'N/A';
             const placeholderImg = 'https://i.imgur.com/IUBzxFv.jpeg';
             return (
-                <div onClick={onCardClick} className="bg-gray-800 rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-700 cursor-pointer hover:border-indigo-500 transition-all">
+                <div onClick={onCardClick} className="result-card bg-gray-800/80 rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-700 cursor-pointer hover:border-indigo-500 hover:scale-105 transition-all duration-300" style={style}>
                     <div className="w-full h-48 bg-white flex items-center justify-center">
                         <img src={item.imageUrl || placeholderImg} alt={item.itemName} className="w-full h-full object-contain" onError={(e) => e.target.src=placeholderImg} />
                     </div>
@@ -510,14 +557,23 @@
         function PaginationControls({ currentPage, onPageChange }) {
             return (
                 <div className="mt-10 flex justify-center items-center space-x-2">
-                    <button onClick={() => onPageChange('prev')} disabled={currentPage === 1} className="px-3 py-1 rounded-md text-sm font-medium bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed">&laquo; Prev</button>
+                    <button onClick={() => onPageChange('prev')} disabled={currentPage === 1} className="px-3 py-1 rounded-md text-sm font-medium bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">&laquo; Prev</button>
                     <span className="px-3 py-1 text-sm text-gray-400">Page {currentPage}</span>
-                    <button onClick={() => onPageChange('next')} className="px-3 py-1 rounded-md text-sm font-medium bg-gray-700 text-gray-200 hover:bg-gray-600">Next &raquo;</button>
+                    <button onClick={() => onPageChange('next')} className="px-3 py-1 rounded-md text-sm font-medium bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors">Next &raquo;</button>
                 </div>
             );
         }
         
+        function EnlargedImage({ src, onClose }) {
+            return (
+                <div onClick={onClose} className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <img src={src} className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+                </div>
+            );
+        }
+
         function ItemModal({ item, onClose }) {
+            const [isImageEnlarged, setIsImageEnlarged] = useState(false);
             const price = parseFloat(item.askingPrice);
             const priceText = !isNaN(price) && price >= 0 ? '$' + price.toFixed(2) : 'N/A';
             const placeholderImg = 'https://i.imgur.com/IUBzxFv.jpeg';
@@ -532,53 +588,56 @@
             }, [onClose]);
 
             return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/75">
-                    <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col relative border border-gray-700">
-                        <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-white z-10">
-                            <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                        </button>
-                        <div className="overflow-y-auto">
-                           <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="md:col-span-1">
-                                    <div className="aspect-square bg-white rounded-lg flex items-center justify-center p-2 shadow-md">
-                                        <img src={imageUrl} alt={item.itemName} className="max-w-full max-h-full object-contain" onError={(e) => e.target.src=placeholderImg} />
-                                    </div>
-                                </div>
-                                <div className="md:col-span-2">
-                                    <h2 className="text-2xl font-bold text-white">{item.itemName || 'N/A'}</h2>
-                                    <p className="text-md text-gray-400 mb-4">by {item.brand || 'Unknown Brand'}</p>
-                                    <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-4">
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-lg font-medium text-gray-300">Price:</span>
-                                            <span className="text-2xl font-bold text-green-400">{priceText}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center mt-2">
-                                            <span className="text-lg font-medium text-gray-300">Available Inventory:</span>
-                                            <span className="text-xl font-semibold text-gray-200">{item.availableInventory || 0}</span>
+                <>
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/75">
+                        <div className="glass-panel rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col relative">
+                            <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-white z-10">
+                                <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                            <div className="overflow-y-auto">
+                               <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="md:col-span-1">
+                                        <div className="aspect-square bg-white rounded-lg flex items-center justify-center p-2 shadow-md cursor-pointer" onClick={() => setIsImageEnlarged(true)}>
+                                            <img src={imageUrl} alt={item.itemName} className="max-w-full max-h-full object-contain" onError={(e) => e.target.src=placeholderImg} />
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
-                                        <p><strong className="font-semibold text-gray-300">SKU:</strong> <span className="text-gray-400 font-mono">{item.sku || 'N/A'}</span></p>
-                                        <p><strong className="font-semibold text-gray-300">UPC:</strong> <span className="text-gray-400 font-mono">{item.upc || 'N/A'}</span></p>
-                                        <p><strong className="font-semibold text-gray-300">Size:</strong> <span className="text-gray-400">{item.size || 'N/A'}</span></p>
-                                        <p><strong className="font-semibold text-gray-300">Gender:</strong> <span className="text-gray-400">{item.gender || 'N/A'}</span></p>
+                                    <div className="md:col-span-2">
+                                        <h2 className="text-2xl font-bold text-white">{item.itemName || 'N/A'}</h2>
+                                        {item.brand && <p className="text-md text-gray-400 mb-4">by {item.brand}</p>}
+                                        <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 mb-4">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-lg font-medium text-gray-300">Price:</span>
+                                                <span className="text-2xl font-bold text-green-400">{priceText}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center mt-2">
+                                                <span className="text-lg font-medium text-gray-300">Available Inventory:</span>
+                                                <span className="text-xl font-semibold text-gray-200">{item.availableInventory || 0}</span>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
+                                            <p><strong className="font-semibold text-gray-300">SKU:</strong> <span className="text-gray-400 font-mono">{item.sku || 'N/A'}</span></p>
+                                            <p><strong className="font-semibold text-gray-300">UPC:</strong> <span className="text-gray-400 font-mono">{item.upc || 'N/A'}</span></p>
+                                            {item.size && <p><strong className="font-semibold text-gray-300">Size:</strong> <span className="text-gray-400">{item.size}</span></p>}
+                                            {item.gender && <p><strong className="font-semibold text-gray-300">Gender:</strong> <span className="text-gray-400">{item.gender}</span></p>}
+                                            {item.type && <p><strong className="font-semibold text-gray-300">Type:</strong> <span className="text-gray-400">{item.type}</span></p>}
+                                        </div>
+                                        {item.description && <p className="text-sm text-gray-400">{item.description}</p>}
                                     </div>
-                                    <p className="text-sm text-gray-400">{item.description || 'No description provided.'}</p>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                    {isImageEnlarged && <EnlargedImage src={imageUrl} onClose={() => setIsImageEnlarged(false)} />}
+                </>
             );
         }
 
         // --- API Docs Component ---
         function ApiDocs() {
-            // UPDATED: New API URL from Cloud Run
             const API_URL = "https://wholesale-api-421345206834.us-central1.run.app";
 
             return (
-                <div className="bg-gray-800/80 border border-gray-700 p-6 rounded-lg text-gray-300">
+                <div className="glass-panel p-6 rounded-lg text-gray-300">
                     <h2 className="text-2xl font-bold text-white mb-4">API Documentation</h2>
                     <p className="mb-6">Use our API to integrate your system with our live product database. All requests must be authenticated using your private API key.</p>
 
@@ -715,7 +774,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             if (loading) return <div className="loader"></div>;
 
             return (
-                <div className="bg-gray-800/80 border border-gray-700 p-6 rounded-lg">
+                <div className="glass-panel p-6 rounded-lg">
                     <h2 className="text-2xl font-bold text-white mb-4">Manage API Key</h2>
                     <p className="text-gray-400 mb-6">Use this key to authenticate your requests to our API. Keep it confidential.</p>
                     {error && <p className="text-red-400 mb-4">{error}</p>}
@@ -772,7 +831,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                             <p className="text-gray-400">You have not generated an API key yet.</p>
                         </div>
                     )}
-                    <button onClick={generateNewKey} disabled={loading} className="mt-6 inline-flex items-center px-6 py-3 rounded-md border border-transparent bg-red-600 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50">
+                    <button onClick={generateNewKey} disabled={loading} className="mt-6 inline-flex items-center px-6 py-3 rounded-md border border-transparent bg-red-600 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
                         {loading ? 'Generating...' : (apiKey ? 'Revoke and Generate New Key' : 'Generate API Key')}
                     </button>
                 </div>

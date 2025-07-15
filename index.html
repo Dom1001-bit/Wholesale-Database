@@ -222,7 +222,15 @@
             const fetchData = async (queryInfo, direction = 'next', pageNum = 1) => {
                 setLoading(true);
                 setError('');
-                let query = productsCollection.orderBy('sku').limit(ITEMS_PER_PAGE);
+                
+                // Determine the primary orderBy field. For inequality filters, 
+                // Firestore requires the first orderBy to be on the same field.
+                let orderByField = 'sku'; // Default order
+                if (queryInfo.constraints.length > 0 && queryInfo.constraints[0].field === 'itemName_lowercase') {
+                    orderByField = 'itemName_lowercase';
+                }
+
+                let query = productsCollection.orderBy(orderByField).limit(ITEMS_PER_PAGE);
 
                 queryInfo.constraints.forEach(constraint => {
                     query = query.where(constraint.field, constraint.op, constraint.value);

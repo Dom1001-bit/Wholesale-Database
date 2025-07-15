@@ -223,11 +223,12 @@
                 setLoading(true);
                 setError('');
                 
-                // Determine the primary orderBy field. For inequality filters, 
-                // Firestore requires the first orderBy to be on the same field.
                 let orderByField = 'sku'; // Default order
-                if (queryInfo.constraints.length > 0 && queryInfo.constraints[0].field === 'itemName_lowercase') {
-                    orderByField = 'itemName_lowercase';
+                if (queryInfo.constraints.length > 0) {
+                    // For inequality filters, Firestore requires the first orderBy to be on the same field.
+                    if (queryInfo.constraints[0].op !== '==') {
+                       orderByField = queryInfo.constraints[0].field;
+                    }
                 }
 
                 let query = productsCollection.orderBy(orderByField).limit(ITEMS_PER_PAGE);
@@ -271,9 +272,15 @@
             const handleSearch = (searchTerm, searchType) => {
                 let constraints = [];
                 if (searchType === 'itemName_lowercase') {
+                    // This is a "starts-with" search
                     constraints.push({ field: 'itemName_lowercase', op: '>=', value: searchTerm.toLowerCase() });
                     constraints.push({ field: 'itemName_lowercase', op: '<=', value: searchTerm.toLowerCase() + '\uf8ff' });
-                } else {
+                } else if (searchType === 'brand') {
+                    // This is a case-insensitive exact match against a dedicated lowercase field.
+                    constraints.push({ field: 'brand_lowercase', op: '==', value: searchTerm.toLowerCase() });
+                }
+                else {
+                    // This handles UPC and SKU which should be exact matches.
                     constraints.push({ field: searchType, op: '==', value: searchTerm });
                 }
                 const newQuery = { type: 'search', constraints };

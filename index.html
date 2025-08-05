@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html class="dark">
 <head>
     <base target="_top">
     <meta charset="UTF-8">
@@ -16,7 +16,7 @@
     <script>
         // Tailwind CSS dark mode configuration
         tailwind.config = {
-            darkMode: 'class',
+            darkMode: 'class', // or 'media'
         }
     </script>
     <style>
@@ -92,29 +92,18 @@
         .skeleton-text { background-color: #e5e7eb; height: 1rem; margin-bottom: 0.5rem; border-radius: 0.25rem; }
         .dark .skeleton-image, .dark .skeleton-text { background-color: #374151; }
 
-        /* Card Animation - Slide up and fade in */
+        /* Card Fade-in Animation */
         .result-card {
             opacity: 0;
-            transform: translateY(25px);
-            animation: card-fade-in 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+            transform: translateY(20px);
+            animation: card-fade-in 0.5s forwards;
         }
-        @keyframes card-fade-in { 
-            to { 
-                opacity: 1; 
-                transform: translateY(0); 
-            } 
-        }
+        @keyframes card-fade-in { to { opacity: 1; transform: translateY(0); } }
         
         pre {
             overflow-x: auto;
             border-radius: 0.5rem;
             padding: 1rem;
-        }
-
-        /* Button press animation */
-        button:active {
-            transform: scale(0.98);
-            transition: transform 0.1s ease;
         }
     </style>
 </head>
@@ -145,7 +134,7 @@
         const db = firebase.firestore();
         const productsCollection = db.collection("products");
 
-        // --- Icons ---
+        // --- Theme Toggle Icons ---
         const SunIcon = () => (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -157,13 +146,6 @@
                 <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
             </svg>
         );
-
-        const EmptyBoxIcon = () => (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-400 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-            </svg>
-        );
-
 
         // --- Main App Component ---
         function App() {
@@ -206,24 +188,24 @@
                 <div className="min-h-screen bg-gray-50 dark:bg-transparent text-gray-800 dark:text-gray-200">
                     {user ? (
                         <div className="container mx-auto p-4 md:p-8">
-                            <header className="flex justify-between items-center mb-8">
+                            <header className="flex justify-between items-center mb-6">
                                 <div className="flex items-center space-x-4">
                                     <img src="https://i.imgur.com/GQya5pg.png" alt="Logo" className="h-12"/>
-                                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Wholesale Portal</h1>
+                                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Wholesale Portal</h1>
                                 </div>
                                 <div className="flex items-center space-x-4">
-                                    <span className="hidden sm:block text-gray-500 dark:text-gray-400 text-sm">{user.email}</span>
+                                    <span className="text-gray-500 dark:text-gray-400 text-sm">{user.email}</span>
                                     <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
                                         {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
                                     </button>
                                     <button onClick={handleLogout} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 transition-colors">Logout</button>
                                 </div>
                             </header>
-                            <div className="border-b border-gray-200 dark:border-gray-700 mb-8">
+                            <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
                                 <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                                    <button onClick={() => setActiveTab('database')} className={`${activeTab === 'database' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 hover:-translate-y-0.5`}>Product Database</button>
-                                    <button onClick={() => setActiveTab('api_docs')} className={`${activeTab === 'api_docs' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 hover:-translate-y-0.5`}>API Documentation</button>
-                                    <button onClick={() => setActiveTab('api_key')} className={`${activeTab === 'api_key' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-all duration-200 hover:-translate-y-0.5`}>Manage API Key</button>
+                                    <button onClick={() => setActiveTab('database')} className={`${activeTab === 'database' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors`}>Product Database</button>
+                                    <button onClick={() => setActiveTab('api_docs')} className={`${activeTab === 'api_docs' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors`}>API Documentation</button>
+                                    <button onClick={() => setActiveTab('api_key')} className={`${activeTab === 'api_key' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-500'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors`}>Manage API Key</button>
                                 </nav>
                             </div>
                             <div>
@@ -247,6 +229,25 @@
             const [error, setError] = useState('');
             const [message, setMessage] = useState('');
             const [loading, setLoading] = useState(false);
+
+            const handlePasswordReset = () => {
+                const emailForReset = prompt("Please enter your email address to reset your password:");
+                if (emailForReset) {
+                    setLoading(true);
+                    auth.sendPasswordResetEmail(emailForReset)
+                        .then(() => {
+                            setMessage("Password reset email sent! Please check your inbox.");
+                            setError('');
+                        })
+                        .catch((err) => {
+                            setError(err.message);
+                            setMessage('');
+                        })
+                        .finally(() => {
+                            setLoading(false);
+                        });
+                }
+            };
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
@@ -274,7 +275,7 @@
             };
             
             return (
-                <div className="flex items-center justify-center min-h-screen p-4">
+                <div className="flex items-center justify-center min-h-screen">
                     <div className="w-full max-w-md p-8 space-y-6 bg-white/60 dark:bg-gray-900/60 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg">
                         <div className="text-center">
                             <img src="https://i.imgur.com/GQya5pg.png" alt="Logo" className="w-20 mx-auto mb-4"/>
@@ -287,7 +288,14 @@
                                 <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full p-2.5 rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                                <div className="flex justify-between items-center">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                                    {isLogin && (
+                                        <button type="button" onClick={handlePasswordReset} className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">
+                                            Forgot password?
+                                        </button>
+                                    )}
+                                </div>
                                 <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full p-2.5 rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
                             </div>
                             {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
@@ -350,16 +358,17 @@
                     const snapshot = await query.get();
                     if (snapshot.empty) {
                         if(isNewSearch) setItems([]);
-                    } else {
-                        setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
-                        setFirstVisibleDoc(snapshot.docs[0]);
-                        setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                        return;
                     }
+                    
+                    setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
+                    setFirstVisibleDoc(snapshot.docs[0]);
+                    setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setCurrentPage(pageNum);
 
                 } catch (err) {
                     console.error("Firestore query failed:", err);
-                    setError("Could not fetch data. " + err.message);
+                    setError("Could not fetch data from the database. " + err.message);
                 } finally {
                     setLoading(false);
                 }
@@ -395,9 +404,13 @@
 
             const handleBulkSearch = async (upcs) => {
                 const upcList = [...new Set(upcs.map(upc => upc.trim()).filter(upc => upc))];
-                if (upcList.length === 0) return;
+                if (upcList.length === 0) {
+                    // Replace alert with a modal or a message on the page in a real app
+                    console.warn("Please paste a list of UPCs.");
+                    return;
+                }
                 if (upcList.length > 300) {
-                    setError("Bulk search is limited to 300 UPCs at a time.");
+                    console.warn("Bulk search is limited to 300 UPCs at a time.");
                     return;
                 }
 
@@ -438,16 +451,24 @@
 
             const handleExport = () => {
                 let dataToExport = currentQuery.type === 'bulk' ? fullBulkResults : items;
-                if (dataToExport.length === 0) return;
+
+                if (dataToExport.length === 0) {
+                    console.warn("No data to export.");
+                    return;
+                }
 
                 const headers = ["SKU", "UPC", "Item Name", "Brand", "Available Inventory", "Asking Price"];
                 const rows = dataToExport.map(item => [
-                    item.sku, `="${item.upc}"`, item.itemName, item.brand,
-                    item.availableInventory, item.askingPrice
+                    item.sku,
+                    `="${item.upc}"`,
+                    item.itemName,
+                    item.brand,
+                    item.availableInventory,
+                    item.askingPrice
                 ]);
 
                 const escapeCell = (cell) => {
-                    const strCell = String(cell ?? "");
+                    const strCell = String(cell === null || cell === undefined ? "" : cell);
                     if (strCell.includes(',') || strCell.includes('"') || strCell.includes('\n')) {
                         return `"${strCell.replace(/"/g, '""')}"`;
                     }
@@ -478,7 +499,7 @@
             return (
                 <div>
                     <SearchControls onSearch={handleSearch} onBrowseAll={handleBrowseAll} onBulkSearch={handleBulkSearch} />
-                    {error && <p className="text-red-500 dark:text-red-400 my-4 text-center">{error}</p>}
+                    {error && <p className="text-red-500 dark:text-red-400 my-4">{error}</p>}
                     
                     {items.length > 0 && !loading && (
                         <div className="flex justify-end mb-4">
@@ -506,19 +527,12 @@
                             {currentQuery.type !== 'bulk' && <PaginationControls currentPage={currentPage} onPageChange={changePage} />}
                         </>
                     ) : (
-                         <NoResults />
+                         <div className="text-center py-16 text-gray-500 dark:text-gray-500 mt-8">
+                            <h3 className="text-xl font-semibold mt-4 text-gray-700 dark:text-gray-300">No Results Found</h3>
+                            <p className="text-gray-500 dark:text-gray-400">Try adjusting your search or browse all products.</p>
+                        </div>
                     )}
                     {selectedItem && <ItemModal item={selectedItem} onClose={() => setSelectedItem(null)} />}
-                </div>
-            );
-        }
-
-        function NoResults() {
-            return (
-                <div className="text-center py-16 mt-8">
-                    <EmptyBoxIcon />
-                    <h3 className="text-xl font-semibold mt-4 text-gray-700 dark:text-gray-300">No Results Found</h3>
-                    <p className="text-gray-500 dark:text-gray-400">Try adjusting your search or browse all products.</p>
                 </div>
             );
         }
@@ -540,30 +554,27 @@
 
             return (
                  <div className="bg-white/70 dark:bg-gray-800/60 backdrop-blur-lg p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
-                    <div>
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Single Product Search</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                            <div className="md:col-span-2">
-                                <label htmlFor="search-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search Term</label>
-                                <input type="text" id="search-input" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Enter UPC, Item Name, etc." className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5" />
-                            </div>
-                            <div>
-                                <label htmlFor="search-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search By</label>
-                                <select id="search-type" value={searchType} onChange={e => setSearchType(e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5">
-                                    <option value="upc">UPC</option>
-                                    <option value="itemName_lowercase">Item Name</option>
-                                    <option value="brand">Brand</option>
-                                    <option value="sku">SKU</option>
-                                </select>
-                            </div>
-                            <div className="md:col-span-2 flex items-center space-x-3">
-                                <button onClick={handleSearchClick} className="w-full inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition-all">Search</button>
-                                <button onClick={onBrowseAll} className="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 py-2.5 px-4 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-600 transition-all">Browse All</button>
-                            </div>
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                        <div className="md:col-span-2">
+                            <label htmlFor="search-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search Term</label>
+                            <input type="text" id="search-input" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Enter UPC, Item Name, etc." className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5" />
+                        </div>
+                        <div>
+                            <label htmlFor="search-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search By</label>
+                            <select id="search-type" value={searchType} onChange={e => setSearchType(e.target.value)} className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5">
+                                <option value="upc">UPC</option>
+                                <option value="itemName_lowercase">Item Name</option>
+                                <option value="brand">Brand</option>
+                                <option value="sku">SKU</option>
+                            </select>
+                        </div>
+                        <div className="md:col-span-2 flex items-center space-x-3">
+                            <button onClick={handleSearchClick} className="w-full inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition-all">Search</button>
+                            <button onClick={onBrowseAll} className="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 py-2.5 px-4 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-600 transition-all">Browse All</button>
                         </div>
                     </div>
-                    <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                        <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Bulk UPC Search</h3>
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <label htmlFor="upc-list-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bulk UPC Search</label>
                         <textarea 
                             id="upc-list-input" 
                             rows="4" 
@@ -574,7 +585,7 @@
                         ></textarea>
                         <button 
                             onClick={handleBulkSearchClick} 
-                            className="mt-3 w-full inline-flex justify-center rounded-md border border-transparent bg-teal-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors"
+                            className="mt-2 w-full inline-flex justify-center rounded-md border border-transparent bg-teal-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors"
                         >
                             Search UPC List
                         </button>
@@ -588,8 +599,8 @@
             const priceText = !isNaN(price) && price >= 0 ? '$' + price.toFixed(2) : 'N/A';
             const placeholderImg = 'https://i.imgur.com/IUBzxFv.jpeg';
             return (
-                <div onClick={onCardClick} className="result-card bg-white dark:bg-gray-800/80 rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-indigo-500 hover:shadow-indigo-500/10 hover:shadow-xl hover:-translate-y-1 transition-all duration-300" style={style}>
-                    <div className="w-full h-48 bg-white flex items-center justify-center p-2">
+                <div onClick={onCardClick} className="result-card bg-white dark:bg-gray-800/80 rounded-lg shadow-lg overflow-hidden flex flex-col border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-indigo-500 hover:scale-105 transition-all duration-300" style={style}>
+                    <div className="w-full h-48 bg-white flex items-center justify-center">
                         <img src={item.imageUrl || placeholderImg} alt={item.itemName} className="w-full h-full object-contain" onError={(e) => e.target.src=placeholderImg} />
                     </div>
                     <div className="p-4 flex-grow flex flex-col">
@@ -656,8 +667,8 @@
                                     </div>
                                     <div className="md:col-span-2">
                                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{item.itemName || 'N/A'}</h2>
-                                        {item.brand && <p className="text-md text-gray-500 dark:text-gray-400 mb-6">by {item.brand}</p>}
-                                        <div className="bg-gray-100/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-6">
+                                        {item.brand && <p className="text-md text-gray-500 dark:text-gray-400 mb-4">by {item.brand}</p>}
+                                        <div className="bg-gray-100/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4">
                                             <div className="flex justify-between items-center">
                                                 <span className="text-lg font-medium text-gray-700 dark:text-gray-300">Price:</span>
                                                 <span className="text-2xl font-bold text-green-600 dark:text-green-400">{priceText}</span>
@@ -673,7 +684,7 @@
                                                 <span className="text-xl font-semibold text-gray-800 dark:text-gray-200">{item.availableInventory || 0}</span>
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-6">
+                                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
                                             <p><strong className="font-semibold text-gray-700 dark:text-gray-300">SKU:</strong> <span className="text-gray-500 dark:text-gray-400 font-mono">{item.sku || 'N/A'}</span></p>
                                             <p><strong className="font-semibold text-gray-700 dark:text-gray-300">UPC:</strong> <span className="text-gray-500 dark:text-gray-400 font-mono">{item.upc || 'N/A'}</span></p>
                                             {item.size && <p><strong className="font-semibold text-gray-700 dark:text-gray-300">Size:</strong> <span className="text-gray-500 dark:text-gray-400">{item.size}</span></p>}
@@ -743,6 +754,7 @@
             "size": "100ml",
             "asin": "B08X44T43G",
             "msrp": 95.00,
+            "category": "Fragrance",
             "availableInventory": 150,
             "askingPrice": 75.99
         },
@@ -773,51 +785,44 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             const [logs, setLogs] = useState([]);
             const [usage, setUsage] = useState({ count: 0, limit: 300 });
 
-            const getUsageBarColor = () => {
-                const percentage = (usage.count / usage.limit) * 100;
-                if (percentage > 90) return 'bg-red-600';
-                if (percentage > 75) return 'bg-yellow-500';
-                return 'bg-indigo-600';
-            };
-
-            const fetchApiKeyData = useCallback(async () => {
-                if (!user) return;
-                setLoading(true);
-                setError('');
-                try {
-                    const userRef = db.collection('users').doc(user.uid);
-                    const doc = await userRef.get();
-                    
-                    if (doc.exists && doc.data().apiKey) {
-                        const currentApiKey = doc.data().apiKey;
-                        setApiKey(currentApiKey);
-
-                        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                        const logsQuery = db.collection('apiLogs')
-                            .where('userId', '==', user.uid)
-                            .where('apiKey', '==', currentApiKey)
-                            .where('timestamp', '>=', twentyFourHoursAgo);
+            useEffect(() => {
+                const fetchApiKeyData = async () => {
+                    if (!user) return;
+                    setError('');
+                    try {
+                        const userRef = db.collection('users').doc(user.uid);
+                        const doc = await userRef.get();
                         
-                        const logSnapshot = await logsQuery.get();
-                        setUsage(prev => ({ ...prev, count: logSnapshot.size }));
-                        
-                        const recentLogsQuery = logsQuery.orderBy('timestamp', 'desc').limit(10);
-                        const recentLogSnapshot = await recentLogsQuery.get();
-                        setLogs(recentLogSnapshot.docs.map(d => d.data()));
+                        if (doc.exists && doc.data().apiKey) {
+                            const currentApiKey = doc.data().apiKey;
+                            setApiKey(currentApiKey);
+
+                            const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                            const logsQuery = db.collection('apiLogs')
+                                .where('userId', '==', user.uid)
+                                .where('apiKey', '==', currentApiKey)
+                                .where('timestamp', '>=', twentyFourHoursAgo);
+                            
+                            const logSnapshot = await logsQuery.get();
+                            setUsage(prev => ({ ...prev, count: logSnapshot.size }));
+                            
+                            const recentLogsQuery = logsQuery.orderBy('timestamp', 'desc').limit(10);
+                            const recentLogSnapshot = await recentLogsQuery.get();
+                            setLogs(recentLogSnapshot.docs.map(d => d.data()));
+                        }
+                    } catch (err) {
+                        console.error("Error fetching API data:", err);
+                        setError('Could not fetch API key and usage data.');
+                    } finally {
+                        setLoading(false);
                     }
-                } catch (err) {
-                    console.error("Error fetching API data:", err);
-                    setError('Could not fetch API key and usage data.');
-                } finally {
-                    setLoading(false);
-                }
+                };
+
+                fetchApiKeyData();
             }, [user]);
 
-            useEffect(() => {
-                fetchApiKeyData();
-            }, [fetchApiKeyData]);
-
             const generateNewKey = async () => {
+                // A better approach would be a custom modal instead of confirm()
                 if (!window.confirm("Are you sure? This will invalidate your old key immediately.")) return;
                 
                 setLoading(true);
@@ -868,7 +873,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                              <div className="mt-6">
                                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">Usage (Last 24 Hours)</h3>
                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-2">
-                                    <div className={`${getUsageBarColor()} h-2.5 rounded-full transition-all duration-500`} style={{ width: `${(usage.count / usage.limit) * 100}%` }}></div>
+                                    <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${(usage.count / usage.limit) * 100}%` }}></div>
                                 </div>
                                 <p className="text-right text-sm text-gray-500 dark:text-gray-400 mt-1">{usage.count} / {usage.limit} calls</p>
                             </div>

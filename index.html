@@ -117,6 +117,7 @@
 
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
+        const { createRoot } = ReactDOM;
 
         // --- Firebase Configuration (WHOLESALE PROJECT) ---
         const firebaseConfig = {
@@ -229,35 +230,40 @@
             const [error, setError] = useState('');
             const [message, setMessage] = useState('');
             const [loading, setLoading] = useState(false);
+            const [loginStatus, setLoginStatus] = useState('idle'); // idle, pending, success, error
+            const [showReset, setShowReset] = useState(false);
 
-            const handlePasswordReset = () => {
-                const emailForReset = prompt("Please enter your email address to reset your password:");
-                if (emailForReset) {
-                    setLoading(true);
-                    auth.sendPasswordResetEmail(emailForReset)
-                        .then(() => {
-                            setMessage("Password reset email sent! Please check your inbox.");
-                            setError('');
-                        })
-                        .catch((err) => {
-                            setError(err.message);
-                            setMessage('');
-                        })
-                        .finally(() => {
-                            setLoading(false);
-                        });
+            const handlePasswordReset = async (e) => {
+                e.preventDefault();
+                if (!email) {
+                    setError("Please enter your email address to reset the password.");
+                    return;
+                }
+                setLoading(true);
+                try {
+                    await auth.sendPasswordResetEmail(email);
+                    setMessage("Password reset email sent! Please check your inbox.");
+                    setError('');
+                    setShowReset(false);
+                } catch (err) {
+                    setError(err.message);
+                    setMessage('');
+                } finally {
+                    setLoading(false);
                 }
             };
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
                 setLoading(true);
+                setLoginStatus('pending');
                 setError('');
                 setMessage('');
 
                 try {
                     if (isLogin) {
                         await auth.signInWithEmailAndPassword(email, password);
+                        setLoginStatus('success');
                     } else {
                         const inviteDoc = await db.collection('invites').doc(email).get();
                         if (!inviteDoc.exists) {
@@ -266,50 +272,85 @@
                         await auth.createUserWithEmailAndPassword(email, password);
                         setMessage('Account created successfully! Please log in.');
                         setIsLogin(true);
+                        setLoginStatus('idle');
                     }
                 } catch (err) {
                     setError(err.message);
+                    setLoginStatus('error');
                 } finally {
                     setLoading(false);
                 }
             };
             
+            if (loginStatus === 'success') {
+                return (
+                    <div className="flex items-center justify-center min-h-screen">
+                        <div className="text-center">
+                            <div className="loader mx-auto"></div>
+                            <p className="mt-4 text-gray-600 dark:text-gray-300">Login successful! Redirecting...</p>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className="flex items-center justify-center min-h-screen">
                     <div className="w-full max-w-md p-8 space-y-6 bg-white/60 dark:bg-gray-900/60 backdrop-blur-lg border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg">
                         <div className="text-center">
                             <img src="https://i.imgur.com/GQya5pg.png" alt="Logo" className="w-20 mx-auto mb-4"/>
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{isLogin ? 'Welcome Back' : 'Create Your Account'}</h2>
-                            <p className="text-gray-600 dark:text-gray-400">{isLogin ? 'Sign in to access the wholesale portal' : 'Sign up with your invited email address'}</p>
+                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{showReset ? 'Reset Password' : (isLogin ? 'Welcome Back' : 'Create Your Account')}</h2>
+                            <p className="text-gray-600 dark:text-gray-400">{showReset ? 'Enter your email to receive a reset link.' : (isLogin ? 'Sign in to access the wholesale portal' : 'Sign up with your invited email address')}</p>
                         </div>
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
-                                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full p-2.5 rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-                            </div>
-                            <div>
-                                <div className="flex justify-between items-center">
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-                                    {isLogin && (
-                                        <button type="button" onClick={handlePasswordReset} className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">
-                                            Forgot password?
-                                        </button>
-                                    )}
+                        
+                        {showReset ? (
+                             <form onSubmit={handlePasswordReset} className="space-y-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
+                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full p-2.5 rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
                                 </div>
-                                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full p-2.5 rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-                            </div>
-                            {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
-                            {message && <p className="text-green-600 dark:text-green-400 text-sm">{message}</p>}
-                            <button type="submit" disabled={loading} className="w-full py-2.5 px-4 rounded-md border border-transparent bg-indigo-600 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
-                                {loading ? <div className="loader mx-auto" style={{width: '20px', height: '20px'}}></div> : (isLogin ? 'Sign In' : 'Sign Up')}
-                            </button>
-                        </form>
-                        <p className="text-sm text-center text-gray-600 dark:text-gray-400">
-                            {isLogin ? "Don't have an account?" : "Already have an account?"}
-                            <button onClick={() => { setIsLogin(!isLogin); setError(''); setMessage(''); }} className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 ml-1">
-                                {isLogin ? 'Sign up' : 'Sign in'}
-                            </button>
-                        </p>
+                                {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
+                                {message && <p className="text-green-600 dark:text-green-400 text-sm">{message}</p>}
+                                <button type="submit" disabled={loading} className="w-full py-2.5 px-4 rounded-md border border-transparent bg-indigo-600 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
+                                    {loading ? <div className="loader mx-auto" style={{width: '20px', height: '20px'}}></div> : 'Send Reset Link'}
+                                </button>
+                                <p className="text-sm text-center">
+                                    <button type="button" onClick={() => setShowReset(false)} className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">
+                                        Back to Login
+                                    </button>
+                                </p>
+                            </form>
+                        ) : (
+                            <>
+                                <form onSubmit={handleSubmit} className="space-y-6">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
+                                        <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full p-2.5 rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between items-center">
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                                            {isLogin && (
+                                                <button type="button" onClick={() => setShowReset(true)} className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">
+                                                    Forgot password?
+                                                </button>
+                                            )}
+                                        </div>
+                                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full p-2.5 rounded-md border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                                    </div>
+                                    {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
+                                    {message && <p className="text-green-600 dark:text-green-400 text-sm">{message}</p>}
+                                    <button type="submit" disabled={loading} className="w-full py-2.5 px-4 rounded-md border border-transparent bg-indigo-600 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
+                                        {loading ? <div className="loader mx-auto" style={{width: '20px', height: '20px'}}></div> : (isLogin ? 'Sign In' : 'Sign Up')}
+                                    </button>
+                                </form>
+                                <p className="text-sm text-center text-gray-600 dark:text-gray-400">
+                                    {isLogin ? "Don't have an account?" : "Already have an account?"}
+                                    <button onClick={() => { setIsLogin(!isLogin); setError(''); setMessage(''); }} className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 ml-1">
+                                        {isLogin ? 'Sign up' : 'Sign in'}
+                                    </button>
+                                </p>
+                            </>
+                        )}
                     </div>
                 </div>
             );
@@ -326,10 +367,11 @@
             const [currentQuery, setCurrentQuery] = useState({ type: 'browse', constraints: [] });
             const [selectedItem, setSelectedItem] = useState(null);
             const [fullBulkResults, setFullBulkResults] = useState([]);
+            const [exportLoading, setExportLoading] = useState(false);
 
             const ITEMS_PER_PAGE = 100;
 
-            const fetchData = async (queryInfo, direction = 'next', pageNum = 1) => {
+            const fetchData = useCallback(async (queryInfo, direction = 'next', pageNum = 1) => {
                 setLoading(true);
                 setError('');
                 
@@ -372,11 +414,11 @@
                 } finally {
                     setLoading(false);
                 }
-            };
+            }, [lastVisibleDoc, firstVisibleDoc]); // Correct dependency array
 
             useEffect(() => {
-                fetchData({ type: 'browse', constraints: [] }, 'next', 1);
-            }, []);
+                fetchData(currentQuery, 'next', 1);
+            }, [currentQuery]); // Depend only on the query itself
             
             const handleSearch = (searchTerm, searchType) => {
                 let constraints = [];
@@ -392,20 +434,17 @@
                 const newQuery = { type: 'search', constraints };
                 setCurrentQuery(newQuery);
                 setFullBulkResults([]);
-                fetchData(newQuery, 'next', 1);
             };
 
             const handleBrowseAll = () => {
                 const newQuery = { type: 'browse', constraints: [] };
                 setCurrentQuery(newQuery);
                 setFullBulkResults([]);
-                fetchData(newQuery, 'next', 1);
             };
-
+            
             const handleBulkSearch = async (upcs) => {
                 const upcList = [...new Set(upcs.map(upc => upc.trim()).filter(upc => upc))];
                 if (upcList.length === 0) {
-                    // Replace alert with a modal or a message on the page in a real app
                     console.warn("Please paste a list of UPCs.");
                     return;
                 }
@@ -416,7 +455,7 @@
 
                 setLoading(true);
                 setError('');
-                setCurrentQuery({ type: 'bulk', constraints: [] });
+                setCurrentQuery({ type: 'bulk', constraints: [], orderBy: 'sku' });
                 setCurrentPage(1);
                 
                 try {
@@ -448,23 +487,12 @@
                     setLoading(false);
                 }
             };
-
-            const handleExport = () => {
-                let dataToExport = currentQuery.type === 'bulk' ? fullBulkResults : items;
-
-                if (dataToExport.length === 0) {
-                    console.warn("No data to export.");
-                    return;
-                }
-
+            
+            const triggerCsvDownload = (dataToExport) => {
                 const headers = ["SKU", "UPC", "Item Name", "Brand", "Available Inventory", "Asking Price"];
                 const rows = dataToExport.map(item => [
-                    item.sku,
-                    `="${item.upc}"`,
-                    item.itemName,
-                    item.brand,
-                    item.availableInventory,
-                    item.askingPrice
+                    item.sku, `="${item.upc}"`, item.itemName, item.brand,
+                    item.availableInventory, item.askingPrice
                 ]);
 
                 const escapeCell = (cell) => {
@@ -490,6 +518,30 @@
                 link.click();
                 document.body.removeChild(link);
             };
+
+            const handleExport = () => {
+                let dataToExport = currentQuery.type === 'bulk' ? fullBulkResults : items;
+                if (dataToExport.length === 0) {
+                    console.warn("No data to export.");
+                    return;
+                }
+                triggerCsvDownload(dataToExport);
+            };
+            
+            const handleFullExport = async () => {
+                setExportLoading(true);
+                try {
+                    const allDocs = [];
+                    const snapshot = await productsCollection.get();
+                    snapshot.forEach(doc => allDocs.push(doc.data()));
+                    triggerCsvDownload(allDocs);
+                } catch (err) {
+                    console.error("Full export failed:", err);
+                    setError("Could not export the full catalog.");
+                } finally {
+                    setExportLoading(false);
+                }
+            };
             
             const changePage = (direction) => {
                 const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
@@ -498,16 +550,23 @@
 
             return (
                 <div>
-                    <SearchControls onSearch={handleSearch} onBrowseAll={handleBrowseAll} onBulkSearch={handleBulkSearch} />
+                    <SearchControls 
+                        onSearch={handleSearch} 
+                        onBrowseAll={handleBrowseAll} 
+                        onBulkSearch={handleBulkSearch}
+                    />
                     {error && <p className="text-red-500 dark:text-red-400 my-4">{error}</p>}
                     
-                    {items.length > 0 && !loading && (
-                        <div className="flex justify-end mb-4">
+                    <div className="flex justify-end mb-4 space-x-2">
+                        {items.length > 0 && !loading && (
                             <button onClick={handleExport} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors">
-                                Export Results to CSV
+                                Export Results
                             </button>
-                        </div>
-                    )}
+                        )}
+                        <button onClick={handleFullExport} disabled={exportLoading} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50">
+                            {exportLoading ? 'Exporting...' : 'Export Full Catalog'}
+                        </button>
+                    </div>
 
                     {loading ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-8">
@@ -915,7 +974,9 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             );
         }
 
-        ReactDOM.render(<App />, document.getElementById('root'));
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
     </script>
 </body>
 </html>

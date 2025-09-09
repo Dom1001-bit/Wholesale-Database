@@ -385,7 +385,7 @@
                                         Back to Login
                                     </button>
                                 </p>
-                             </form>
+                               </form>
                         ) : (
                             <>
                                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -458,6 +458,35 @@
             const [sortDirection, setSortDirection] = useState('asc');
 
             const ITEMS_PER_PAGE = 100;
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            // OPTIMIZED: Fetch brands from the dedicated document
+            useEffect(() => {
+                const fetchAllBrands = async () => {
+                    if (!appId) return;
+                    try {
+                        // TROUBLESHOOT FIX: The path was incorrect. It's now updated to match the user's database structure.
+                        const brandsDocRef = db.collection('artifacts').doc(appId).collection('public').doc('brandsList');
+                        const brandsDoc = await brandsDocRef.get();
+                        
+                        if (brandsDoc.exists) {
+                            const brandData = brandsDoc.data();
+                            if (brandData && brandData.allBrandNames) {
+                                setAllBrands(brandData.allBrandNames);
+                            }
+                        } else {
+                            console.warn("Brand list document not found. Ensure your sync script is running and creating a document at 'artifacts/{appId}/public/brandsList'.");
+                        }
+                    } catch (err) {
+                        console.error("Failed to fetch brands list:", err);
+                        setError("Could not load brand filter list. This is likely due to a permissions issue. Please check your Firestore security rules.");
+                    } finally {
+                        setInitialBrandsLoaded(true);
+                    }
+                };
+                fetchAllBrands();
+            }, [appId]);
+
 
             const fetchData = useCallback(async (direction = 'next', pageNum = 1) => {
                 if (searchMode === 'bulk') return; 
@@ -468,7 +497,6 @@
                 
                 let query = productsCollection;
 
-                // --- Query Construction ---
                 const selectedTags = Object.entries(activeFilters.tags)
                     .filter(([, value]) => value)
                     .map(([key]) => key);
@@ -491,9 +519,7 @@
 
                 const primaryOrderByField = isNameSearch ? 'itemName_lowercase' : sortBy;
                 
-                // Firestore doesn't allow inequality filter on a different field than the first orderBy.
-                // If we have an `in` filter, we can't have another inequality. So we sort by the tag field first if it's active.
-                if (selectedTags.length > 0) {
+                if (selectedTags.length > 0 && !isNameSearch) {
                     query = query.orderBy('specialTag');
                 }
                 query = query.orderBy(primaryOrderByField, sortDirection);
@@ -520,19 +546,9 @@
                         setFirstVisibleDoc(snapshot.docs[0]);
                         setItems(newItems);
                     } else if (!isNewQuery) {
-                        // Reached end or beginning
+                       // End of pages
                     } else {
                         setItems([]);
-                    }
-                    
-                    if (!initialBrandsLoaded) {
-                        const brandsSnapshot = await productsCollection.orderBy('brand').get();
-                        const brands = new Set();
-                        brandsSnapshot.forEach(doc => {
-                           if(doc.data().brand) brands.add(doc.data().brand);
-                        });
-                        setAllBrands([...brands].sort());
-                        setInitialBrandsLoaded(true);
                     }
                     
                     setCurrentPage(pageNum);
@@ -543,7 +559,7 @@
                 } finally {
                     setLoading(false);
                 }
-            }, [activeFilters, sortBy, sortDirection, lastVisibleDoc, firstVisibleDoc, searchMode, initialBrandsLoaded]);
+            }, [activeFilters, sortBy, sortDirection, lastVisibleDoc, firstVisibleDoc, searchMode]);
 
 
             useEffect(() => {
@@ -779,12 +795,12 @@
             ];
 
             const handleBrandChange = (brand) => {
-                onFilterChange({ brand: brand });
+                onFilterChange({ ...activeFilters, brand: brand });
             };
 
             const handleTagChange = (tagValue) => {
                 const newTags = { ...activeFilters.tags, [tagValue]: !activeFilters.tags[tagValue] };
-                onFilterChange({ tags: newTags });
+                onFilterChange({ ...activeFilters, tags: newTags });
             };
 
             const filteredBrands = useMemo(() => {
@@ -803,8 +819,8 @@
                        <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Tags</h4>
                        <div className="space-y-2">
                            {tagFilters.map(tag => (
-                                <label key={tag.value} className="flex items-center space-x-2 cursor-pointer">
-                                   <input 
+                               <label key={tag.value} className="flex items-center space-x-2 cursor-pointer">
+                                  <input 
                                        type="checkbox" 
                                        checked={activeFilters.tags[tag.value] || false}
                                        onChange={() => handleTagChange(tag.value)}
@@ -881,17 +897,17 @@
                          <div className="md:col-span-2">
                             <label htmlFor="sort-by" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sort By</label>
                              <div className="flex">
-                                <select id="sort-by" value={sortBy} onChange={setSortBy} className="block w-full rounded-l-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5">
-                                    <option value="brand">Brand</option>
-                                    <option value="itemName_lowercase">Item Name</option>
-                                    <option value="sku">SKU</option>
-                                    <option value="upc">UPC</option>
-                                    <option value="askingPrice">Price</option>
-                                    <option value="availableInventory">Inventory</option>
-                                </select>
-                                <button onClick={onSortDirectionChange} className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-r-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                                    {sortDirection === 'asc' ? '▲' : '▼'}
-                                </button>
+                                 <select id="sort-by" value={sortBy} onChange={setSortBy} className="block w-full rounded-l-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5">
+                                     <option value="brand">Brand</option>
+                                     <option value="itemName_lowercase">Item Name</option>
+                                     <option value="sku">SKU</option>
+                                     <option value="upc">UPC</option>
+                                     <option value="askingPrice">Price</option>
+                                     <option value="availableInventory">Inventory</option>
+                                 </select>
+                                 <button onClick={onSortDirectionChange} className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-r-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                                     {sortDirection === 'asc' ? '▲' : '▼'}
+                                 </button>
                              </div>
                         </div>
                         <div className="md:col-span-3 flex items-center space-x-3">
@@ -980,7 +996,9 @@
 
             useEffect(() => {
                 const handleEsc = (event) => {
-                   if (event.keyCode === 27) onClose();
+                   if (event.keyCode === 27) {
+                        onClose();
+                   }
                 };
                 window.addEventListener('keydown', handleEsc);
                 return () => window.removeEventListener('keydown', handleEsc);
@@ -1041,6 +1059,34 @@
                     </div>
                     {isImageEnlarged && <EnlargedImage src={imageUrl} onClose={() => setIsImageEnlarged(false)} />}
                 </>
+            );
+        }
+
+        // --- Confirmation Modal ---
+        function ConfirmationModal({ show, onClose, onConfirm, title, children }) {
+            if (!show) {
+                return null;
+            }
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 dark:bg-gray-900/75 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md border border-gray-200 dark:border-gray-700">
+                        <div className="p-6">
+                            <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{title}</h3>
+                            <div className="mt-2 text-gray-600 dark:text-gray-400">
+                                {children}
+                            </div>
+                        </div>
+                        <div className="bg-gray-100 dark:bg-gray-800/50 px-6 py-4 flex justify-end space-x-3 rounded-b-lg">
+                            <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                                Cancel
+                            </button>
+                            <button onClick={onConfirm} className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 transition-colors">
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
+                </div>
             );
         }
 
@@ -1124,6 +1170,7 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             const [showKey, setShowKey] = useState(false);
             const [logs, setLogs] = useState([]);
             const [usage, setUsage] = useState({ count: 0, limit: 300 });
+            const [showConfirmModal, setShowConfirmModal] = useState(false);
 
             useEffect(() => {
                 const fetchApiKeyData = async () => {
@@ -1161,10 +1208,12 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                 fetchApiKeyData();
             }, [user]);
 
-            const generateNewKey = async () => {
-                // In a real app, use a custom modal component instead of confirm()
-                if (!window.confirm("Are you sure? This will invalidate your old key immediately.")) return;
-                
+            const handleGenerateClick = () => {
+                setShowConfirmModal(true);
+            };
+
+            const confirmGenerateNewKey = async () => {
+                setShowConfirmModal(false);
                 setLoading(true);
                 setError('');
                 const newKey = 'wh_live_' + [...Array(32)].map(() => Math.random().toString(36)[2]).join('');
@@ -1191,67 +1240,77 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
             if (loading) return <div className="flex justify-center mt-8"><div className="loader"></div></div>;
 
             return (
-                <div className="bg-white/70 dark:bg-gray-800/60 backdrop-blur-lg p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Manage API Key</h2>
-                    <p className="text-gray-600 dark:text-gray-400 mb-6">Use this key to authenticate your requests to our API. Keep it confidential.</p>
-                    {error && <p className="text-red-500 dark:text-red-400 mb-4">{error}</p>}
-                    {apiKey ? (
-                        <div>
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Your API Key</label>
-                            <div className="flex items-center space-x-2">
-                                <div className="flex-grow p-4 rounded-lg font-mono text-gray-800 dark:text-gray-300 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
-                                    {showKey ? apiKey : '************************************'}
+                <>
+                    <ConfirmationModal
+                        show={showConfirmModal}
+                        onClose={() => setShowConfirmModal(false)}
+                        onConfirm={confirmGenerateNewKey}
+                        title="Generate New API Key?"
+                    >
+                        <p>Are you sure? This will invalidate your old key immediately. Any application using the current key will stop working.</p>
+                    </ConfirmationModal>
+                    <div className="bg-white/70 dark:bg-gray-800/60 backdrop-blur-lg p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Manage API Key</h2>
+                        <p className="text-gray-600 dark:text-gray-400 mb-6">Use this key to authenticate your requests to our API. Keep it confidential.</p>
+                        {error && <p className="text-red-500 dark:text-red-400 mb-4">{error}</p>}
+                        {apiKey ? (
+                            <div>
+                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Your API Key</label>
+                                <div className="flex items-center space-x-2">
+                                    <div className="flex-grow p-4 rounded-lg font-mono text-gray-800 dark:text-gray-300 bg-gray-100 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                                        {showKey ? apiKey : '************************************'}
+                                    </div>
+                                    <button onClick={() => setShowKey(!showKey)} title={showKey ? 'Hide key' : 'Show key'} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-500 dark:text-gray-400">
+                                        {showKey ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
+                                        ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                        )}
+                                    </button>
                                 </div>
-                                <button onClick={() => setShowKey(!showKey)} title={showKey ? 'Hide key' : 'Show key'} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-500 dark:text-gray-400">
-                                    {showKey ? (
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" /></svg>
-                                    ) : (
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                    )}
-                                </button>
-                            </div>
-                             <div className="mt-6">
-                                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">Usage (Last 24 Hours)</h3>
-                                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-2">
-                                      <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${(usage.count / usage.limit) * 100}%` }}></div>
-                                  </div>
-                                  <p className="text-right text-sm text-gray-500 dark:text-gray-400 mt-1">{usage.count} / {usage.limit} calls</p>
-                              </div>
-
-                              <div className="mt-6">
-                                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Recent API Calls</h3>
-                                  {logs.length > 0 ? (
-                                      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                                          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                              <thead className="bg-gray-50 dark:bg-gray-900/50">
-                                                  <tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Timestamp</th></tr>
-                                              </thead>
-                                              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                  {logs.map((log, index) => (
-                                                      <tr key={index}>
-                                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{new Date(log.timestamp.seconds * 1000).toLocaleString()}</td>
-                                                      </tr>
-                                                  ))}
-                                              </tbody>
-                                          </table>
+                                 <div className="mt-6">
+                                      <h3 className="text-lg font-medium text-gray-900 dark:text-white">Usage (Last 24 Hours)</h3>
+                                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-2">
+                                          <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${(usage.count / usage.limit) * 100}%` }}></div>
                                       </div>
-                                  ) : (
-                                      <p className="text-gray-500 dark:text-gray-500 text-sm">No recent API calls in the last 24 hours.</p>
-                                  )}
-                              </div>
-                            <div className="bg-yellow-100/50 dark:bg-yellow-900/50 border border-yellow-400 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 text-sm rounded-md p-3 mt-6">
-                                <strong>Warning:</strong> If you generate a new key, your old key will be immediately revoked. Ensure you update any applications using the old key.
+                                      <p className="text-right text-sm text-gray-500 dark:text-gray-400 mt-1">{usage.count} / {usage.limit} calls</p>
+                                  </div>
+
+                                  <div className="mt-6">
+                                      <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Recent API Calls</h3>
+                                      {logs.length > 0 ? (
+                                          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                                  <thead className="bg-gray-50 dark:bg-gray-900/50">
+                                                      <tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Timestamp</th></tr>
+                                                  </thead>
+                                                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                      {logs.map((log, index) => (
+                                                          <tr key={index}>
+                                                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{new Date(log.timestamp.seconds * 1000).toLocaleString()}</td>
+                                                          </tr>
+                                                      ))}
+                                                  </tbody>
+                                              </table>
+                                          </div>
+                                      ) : (
+                                          <p className="text-gray-500 dark:text-gray-500 text-sm">No recent API calls in the last 24 hours.</p>
+                                      )}
+                                  </div>
+                                <div className="bg-yellow-100/50 dark:bg-yellow-900/50 border border-yellow-400 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 text-sm rounded-md p-3 mt-6">
+                                    <strong>Warning:</strong> If you generate a new key, your old key will be immediately revoked. Ensure you update any applications using the old key.
+                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="text-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                            <p className="text-gray-500 dark:text-gray-400">You have not generated an API key yet.</p>
-                        </div>
-                    )}
-                    <button onClick={generateNewKey} disabled={loading} className="mt-6 inline-flex items-center px-6 py-3 rounded-lg border border-transparent bg-red-600 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
-                        {loading ? 'Generating...' : (apiKey ? 'Revoke and Generate New Key' : 'Generate API Key')}
-                    </button>
-                </div>
+                        ) : (
+                            <div className="text-center p-6 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                                <p className="text-gray-500 dark:text-gray-400">You have not generated an API key yet.</p>
+                            </div>
+                        )}
+                        <button onClick={handleGenerateClick} disabled={loading} className="mt-6 inline-flex items-center px-6 py-3 rounded-lg border border-transparent bg-red-600 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
+                            {loading ? 'Generating...' : (apiKey ? 'Revoke and Generate New Key' : 'Generate API Key')}
+                        </button>
+                    </div>
+                </>
             );
         }
 

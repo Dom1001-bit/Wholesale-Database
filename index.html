@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html class="dark">
+<html>
 <head>
     <base target="_top">
     <meta charset="UTF-8">
@@ -105,6 +105,22 @@
             border-radius: 0.5rem;
             padding: 1rem;
         }
+
+        /* Custom scrollbar for filter panel */
+        .filter-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .filter-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .filter-scrollbar::-webkit-scrollbar-thumb {
+            background: #a5b4fc; /* indigo-300 */
+            border-radius: 3px;
+        }
+        .dark .filter-scrollbar::-webkit-scrollbar-thumb {
+            background: #4338ca; /* indigo-800 */
+        }
+
     </style>
 </head>
 <body>
@@ -116,7 +132,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
+        const { useState, useEffect, useCallback, useMemo } = React;
         const { createRoot } = ReactDOM;
 
         // --- Firebase Configuration ---
@@ -214,7 +230,7 @@
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
             const [activeTab, setActiveTab] = useState('database');
-            const [theme, setTheme] = useState('dark');
+            const [theme, setTheme] = useState('light');
 
             useEffect(() => {
                 const unsubscribe = auth.onAuthStateChanged(user => {
@@ -259,7 +275,7 @@
                                 setTheme={setTheme}
                             />
                             <main>
-                                <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8">
+                                <div className={`py-8 px-4 sm:px-6 lg:px-8 ${activeTab !== 'database' ? 'container mx-auto' : ''}`}>
                                     {activeTab === 'database' && <ProductDatabase />}
                                     {activeTab === 'api_docs' && <ApiDocs />}
                                     {activeTab === 'api_key' && <ApiKeyManager user={user} />}
@@ -273,7 +289,7 @@
             );
         }
 
-        // --- Authentication Component ---
+        // --- Authentication Component (omitted for brevity, same as original) ---
         function AuthComponent() {
             const [isLogin, setIsLogin] = useState(true);
             const [email, setEmail] = useState('');
@@ -355,20 +371,20 @@
                         
                         {showReset ? (
                              <form onSubmit={handlePasswordReset} className="space-y-6">
-                                 <div>
-                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
-                                     <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full p-3 rounded-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-                                 </div>
-                                 {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
-                                 {message && <p className="text-green-600 dark:text-green-400 text-sm">{message}</p>}
-                                 <button type="submit" disabled={loading} className="w-full py-3 px-4 rounded-lg border border-transparent bg-indigo-600 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
-                                     {loading ? <div className="loader mx-auto" style={{width: '20px', height: '20px'}}></div> : 'Send Reset Link'}
-                                 </button>
-                                 <p className="text-sm text-center">
-                                     <button type="button" onClick={() => setShowReset(false)} className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">
-                                         Back to Login
-                                     </button>
-                                 </p>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email Address</label>
+                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} required className="mt-1 block w-full p-3 rounded-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                                </div>
+                                {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
+                                {message && <p className="text-green-600 dark:text-green-400 text-sm">{message}</p>}
+                                <button type="submit" disabled={loading} className="w-full py-3 px-4 rounded-lg border border-transparent bg-indigo-600 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 transition-colors">
+                                    {loading ? <div className="loader mx-auto" style={{width: '20px', height: '20px'}}></div> : 'Send Reset Link'}
+                                </button>
+                                <p className="text-sm text-center">
+                                    <button type="button" onClick={() => setShowReset(false)} className="font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300">
+                                        Back to Login
+                                    </button>
+                                </p>
                              </form>
                         ) : (
                             <>
@@ -415,135 +431,191 @@
             const [lastVisibleDoc, setLastVisibleDoc] = useState(null);
             const [firstVisibleDoc, setFirstVisibleDoc] = useState(null);
             const [currentPage, setCurrentPage] = useState(1);
-            const [currentQuery, setCurrentQuery] = useState({ type: 'browse', constraints: [] });
             const [selectedItem, setSelectedItem] = useState(null);
-            const [fullBulkResults, setFullBulkResults] = useState([]);
             const [exportLoading, setExportLoading] = useState(false);
+            const [searchMode, setSearchMode] = useState('browse');
+            
+            const [allBrands, setAllBrands] = useState([]);
+            const [initialBrandsLoaded, setInitialBrandsLoaded] = useState(false);
+            const [activeFilters, setActiveFilters] = useState({
+                brand: 'All Brands',
+                search: { term: '', type: 'upc' },
+                tags: { specialPricing: false }
+            });
+            const [sortBy, setSortBy] = useState('brand');
+            const [sortDirection, setSortDirection] = useState('asc');
 
             const ITEMS_PER_PAGE = 100;
 
-            const fetchData = useCallback(async (queryInfo, direction = 'next', pageNum = 1) => {
+            const fetchData = useCallback(async (direction = 'next', pageNum = 1) => {
+                if (searchMode === 'bulk') return; 
                 setLoading(true);
                 setError('');
                 
-                let orderByField = 'sku'; 
-                if (queryInfo.constraints.length > 0) {
-                    if (queryInfo.constraints[0].op !== '==') {
-                       orderByField = queryInfo.constraints[0].field;
-                    }
+                const isNewQuery = pageNum === 1;
+                
+                let query = productsCollection;
+
+                // --- Query Construction ---
+
+                // ** 1. Filtering **
+                // Apply simple equality filters first. These are efficient.
+                if (activeFilters.brand && activeFilters.brand !== 'All Brands') {
+                    query = query.where('brand', '==', activeFilters.brand);
+                }
+                if (activeFilters.tags.specialPricing) {
+                    query = query.where('specialPricingTag', '==', true);
+                }
+                
+                // Handle text search, which uses a range filter.
+                const isNameSearch = activeFilters.search.term && activeFilters.search.type === 'itemName_lowercase';
+                if (isNameSearch) {
+                     query = query.where('itemName_lowercase', '>=', activeFilters.search.term.toLowerCase());
+                     query = query.where('itemName_lowercase', '<=', activeFilters.search.term.toLowerCase() + '\uf8ff');
+                } else if (activeFilters.search.term) {
+                     // Handle equality search for UPC, SKU etc.
+                     query = query.where(activeFilters.search.type, '==', activeFilters.search.term);
                 }
 
-                let query = productsCollection.orderBy(orderByField).limit(ITEMS_PER_PAGE);
+                // ** 2. Sorting **
+                // Firestore requires the first orderBy to match the field used in a range filter.
+                // If we are doing a name search, we MUST sort by name first.
+                const primaryOrderByField = isNameSearch ? 'itemName_lowercase' : sortBy;
+                query = query.orderBy(primaryOrderByField, sortDirection);
 
-                queryInfo.constraints.forEach(constraint => {
-                    query = query.where(constraint.field, constraint.op, constraint.value);
-                });
+                // Add a secondary sort field to ensure consistent ordering for items with the same value.
+                // This is crucial for stable pagination.
+                if (primaryOrderByField !== 'sku') {
+                    query = query.orderBy('sku', 'asc');
+                }
 
-                const isNewSearch = pageNum === 1;
-
-                if (direction === 'next' && !isNewSearch && lastVisibleDoc) {
+                // ** 3. Pagination **
+                query = query.limit(ITEMS_PER_PAGE);
+                if (direction === 'next' && !isNewQuery && lastVisibleDoc) {
                     query = query.startAfter(lastVisibleDoc);
-                } else if (direction === 'prev' && !isNewSearch && firstVisibleDoc) {
+                } else if (direction === 'prev' && !isNewQuery && firstVisibleDoc) {
                     query = query.endBefore(firstVisibleDoc).limitToLast(ITEMS_PER_PAGE);
                 }
 
+                // --- Execution ---
                 try {
                     const snapshot = await query.get();
-                    if (snapshot.empty) {
-                        if(isNewSearch) setItems([]);
-                        return;
+                    const newItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                    if (snapshot.empty && isNewQuery) {
+                        setItems([]);
+                    } else {
+                        setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
+                        setFirstVisibleDoc(snapshot.docs[0]);
+                        setItems(newItems);
                     }
                     
-                    setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
-                    setFirstVisibleDoc(snapshot.docs[0]);
-                    setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                    // PERFORMANCE OPTIMIZATION: Populate brand list from the first batch of results.
+                    if (!initialBrandsLoaded && newItems.length > 0) {
+                        const brandsSnapshot = await productsCollection.orderBy('brand').get();
+                        const brands = new Set();
+                        brandsSnapshot.forEach(doc => {
+                           if(doc.data().brand) brands.add(doc.data().brand);
+                        });
+                        setAllBrands([...brands].sort());
+                        setInitialBrandsLoaded(true);
+                    }
+                    
                     setCurrentPage(pageNum);
-
                 } catch (err) {
                     console.error("Firestore query failed:", err);
-                    setError("Could not fetch data from the database. " + err.message);
-                } finally {
-                    setLoading(false);
-                }
-            }, [lastVisibleDoc, firstVisibleDoc]);
-
-            useEffect(() => {
-                fetchData(currentQuery, 'next', 1);
-            }, [currentQuery]); 
-            
-            const handleSearch = (searchTerm, searchType) => {
-                let constraints = [];
-                if (searchType === 'itemName_lowercase') {
-                    constraints.push({ field: 'itemName_lowercase', op: '>=', value: searchTerm.toLowerCase() });
-                    constraints.push({ field: 'itemName_lowercase', op: '<=', value: searchTerm.toLowerCase() + '\uf8ff' });
-                } else if (searchType === 'brand') {
-                    constraints.push({ field: 'brand_lowercase', op: '==', value: searchTerm.toLowerCase() });
-                }
-                else {
-                    constraints.push({ field: searchType, op: '==', value: searchTerm });
-                }
-                const newQuery = { type: 'search', constraints };
-                setCurrentQuery(newQuery);
-                setFullBulkResults([]);
-            };
-
-            const handleBrowseAll = () => {
-                const newQuery = { type: 'browse', constraints: [] };
-                setCurrentQuery(newQuery);
-                setFullBulkResults([]);
-            };
-            
-            const handleBulkSearch = async (upcs) => {
-                const upcList = [...new Set(upcs.map(upc => upc.trim()).filter(upc => upc))];
-                if (upcList.length === 0) {
-                    console.warn("Please paste a list of UPCs.");
-                    return;
-                }
-                if (upcList.length > 300) {
-                    console.warn("Bulk search is limited to 300 UPCs at a time.");
-                    return;
-                }
-
-                setLoading(true);
-                setError('');
-                setCurrentQuery({ type: 'bulk', constraints: [], orderBy: 'sku' });
-                setCurrentPage(1);
-                
-                try {
-                    const chunks = [];
-                    for (let i = 0; i < upcList.length; i += 10) {
-                        chunks.push(upcList.slice(i, i + 10));
-                    }
-
-                    const queryPromises = chunks.map(chunk => 
-                        productsCollection.where('upc', 'in', chunk).get()
-                    );
-                    
-                    const querySnapshots = await Promise.all(queryPromises);
-                    
-                    const allDocs = [];
-                    querySnapshots.forEach(snapshot => {
-                        snapshot.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
-                    });
-                    
-                    const sortedDocs = allDocs.sort((a, b) => a.sku.localeCompare(b.sku));
-                    setItems(sortedDocs);
-                    setFullBulkResults(sortedDocs);
-
-                } catch (err) {
-                    console.error("Firestore bulk query failed:", err);
-                    setError("Could not fetch data for bulk search. " + err.message);
+                    setError("Could not fetch data. This can happen if a combination of filters and sorting is not supported by a database index. Try clearing filters. Error: " + err.message);
                     setItems([]);
                 } finally {
                     setLoading(false);
                 }
+            }, [activeFilters, sortBy, sortDirection, lastVisibleDoc, firstVisibleDoc, searchMode, initialBrandsLoaded]);
+
+
+            useEffect(() => {
+                fetchData('next', 1);
+            }, [activeFilters, sortBy, sortDirection]);
+
+            const handleFilterChange = (newFilters) => {
+                setSearchMode('browse');
+                setActiveFilters(prev => ({...prev, ...newFilters}));
+                setCurrentPage(1);
             };
             
+            const handleSearch = (searchTerm, searchType) => {
+                setSearchMode('search');
+                setActiveFilters(prev => ({ ...prev, search: { term: searchTerm, type: searchType } }));
+                setCurrentPage(1);
+            };
+
+            const handleBulkSearch = async (upcs) => {
+                 const upcList = [...new Set(upcs.map(upc => upc.trim()).filter(upc => upc))];
+                 if (upcList.length === 0) return;
+                 if (upcList.length > 300) {
+                     setError("Bulk search is limited to 300 UPCs at a time.");
+                     return;
+                 }
+
+                 setLoading(true);
+                 setSearchMode('bulk');
+                 setError('');
+                 setCurrentPage(1);
+                 
+                 try {
+                     const chunks = [];
+                     for (let i = 0; i < upcList.length; i += 10) {
+                         chunks.push(upcList.slice(i, i + 10));
+                     }
+
+                     const queryPromises = chunks.map(chunk => 
+                         productsCollection.where('upc', 'in', chunk).get()
+                     );
+                     
+                     const querySnapshots = await Promise.all(queryPromises);
+                     
+                     const allDocs = [];
+                     querySnapshots.forEach(snapshot => {
+                         snapshot.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
+                     });
+                     
+                     const sortedDocs = allDocs.sort((a, b) => a.sku.localeCompare(b.sku));
+                     setItems(sortedDocs);
+
+                 } catch (err) {
+                     console.error("Firestore bulk query failed:", err);
+                     setError("Could not fetch data for bulk search. " + err.message);
+                     setItems([]);
+                 } finally {
+                     setLoading(false);
+                 }
+            };
+            
+            const handleSortDirection = () => {
+                setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+            };
+
+            const handleBrowseAll = () => {
+                setSearchMode('browse');
+                setActiveFilters({
+                    brand: 'All Brands',
+                    search: { term: '', type: 'upc' },
+                    tags: { specialPricing: false }
+                });
+                setSortBy('brand');
+                setSortDirection('asc');
+                setCurrentPage(1);
+            };
+
             const triggerCsvDownload = (dataToExport) => {
-                const headers = ["SKU", "UPC", "Item Name", "Brand", "Available Inventory", "Asking Price"];
+                const headers = ["SKU", "UPC", "Item Name", "Brand", "Available Inventory", "Asking Price", "Image URL"];
                 const rows = dataToExport.map(item => [
-                    item.sku, `="${item.upc}"`, item.itemName, item.brand,
-                    item.availableInventory, item.askingPrice
+                    item.sku,
+                    `="${item.upc}"`,
+                    item.itemName,
+                    item.brand,
+                    item.availableInventory,
+                    item.askingPrice,
+                    item.imageUrl || ''
                 ]);
 
                 const escapeCell = (cell) => {
@@ -571,12 +643,11 @@
             };
 
             const handleExport = () => {
-                let dataToExport = currentQuery.type === 'bulk' ? fullBulkResults : items;
-                if (dataToExport.length === 0) {
+                if (items.length === 0) {
                     console.warn("No data to export.");
                     return;
                 }
-                triggerCsvDownload(dataToExport);
+                triggerCsvDownload(items);
             };
             
             const handleFullExport = async () => {
@@ -596,58 +667,144 @@
             
             const changePage = (direction) => {
                 const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
-                fetchData(currentQuery, direction, newPage);
+                fetchData(direction, newPage);
             };
 
             return (
-                <div>
-                    <SearchControls 
-                        onSearch={handleSearch} 
-                        onBrowseAll={handleBrowseAll} 
-                        onBulkSearch={handleBulkSearch}
-                    />
-                    {error && <p className="text-red-500 dark:text-red-400 my-4">{error}</p>}
-                    
-                    <div className="flex justify-end mb-4 space-x-2">
-                        {items.length > 0 && !loading && (
-                            <button onClick={handleExport} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors">
-                                Export Results
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <aside className="lg:col-span-2">
+                        <FilterSidePanel 
+                           allBrands={allBrands}
+                           activeFilters={activeFilters}
+                           onFilterChange={handleFilterChange}
+                           initialBrandsLoaded={initialBrandsLoaded}
+                        />
+                    </aside>
+                    <div className="lg:col-span-10">
+                        <SearchControls 
+                            onSearch={handleSearch}
+                            onBulkSearch={handleBulkSearch}
+                            onBrowseAll={handleBrowseAll}
+                            sortBy={sortBy}
+                            setSortBy={setSortBy}
+                            sortDirection={sortDirection}
+                            onSortDirectionChange={handleSortDirection}
+                        />
+                        {error && <p className="text-red-500 dark:text-red-400 my-4 p-4 bg-red-100 dark:bg-red-900/50 rounded-lg">{error}</p>}
+                        
+                        <div className="flex justify-end mb-4 space-x-2">
+                            {items.length > 0 && !loading && (
+                                <button onClick={handleExport} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors">
+                                    Export Results
+                                </button>
+                            )}
+                            <button onClick={handleFullExport} disabled={exportLoading} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50">
+                                {exportLoading ? 'Exporting...' : 'Export Full Catalog'}
                             </button>
-                        )}
-                        <button onClick={handleFullExport} disabled={exportLoading} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50">
-                            {exportLoading ? 'Exporting...' : 'Export Full Catalog'}
-                        </button>
-                    </div>
-
-                    {loading ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-8">
-                            {Array.from({ length: 10 }).map((_, i) => (
-                                <div key={i} className="skeleton-card">
-                                    <div className="skeleton-image"></div>
-                                    <div className="p-4"><div className="skeleton-text w-3/4"></div><div className="skeleton-text w-1/2"></div></div>
-                                    <div className="shimmer"></div>
-                                </div>
-                            ))}
                         </div>
-                    ) : items.length > 0 ? (
-                        <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                                {items.map((item, index) => <ItemCard key={item.id} item={item} onCardClick={() => setSelectedItem(item)} style={{ animationDelay: `${index * 50}ms` }} />)}
+
+                        {loading ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                                {Array.from({ length: 10 }).map((_, i) => (
+                                    <div key={i} className="skeleton-card">
+                                        <div className="skeleton-image"></div>
+                                        <div className="p-4"><div className="skeleton-text w-3/4"></div><div className="skeleton-text w-1/2"></div></div>
+                                        <div className="shimmer"></div>
+                                    </div>
+                                ))}
                             </div>
-                            {currentQuery.type !== 'bulk' && <PaginationControls currentPage={currentPage} onPageChange={changePage} />}
-                        </>
-                    ) : (
-                         <div className="text-center py-16 text-gray-500 dark:text-gray-500 mt-8 bg-white dark:bg-gray-800/50 rounded-xl">
-                             <h3 className="text-xl font-semibold mt-4 text-gray-700 dark:text-gray-300">No Results Found</h3>
-                             <p className="text-gray-500 dark:text-gray-400">Try adjusting your search or browse all products.</p>
-                         </div>
-                    )}
-                    {selectedItem && <ItemModal item={selectedItem} onClose={() => setSelectedItem(null)} />}
+                        ) : items.length > 0 ? (
+                            <>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+                                    {items.map((item, index) => <ItemCard key={item.id} item={item} onCardClick={() => setSelectedItem(item)} style={{ animationDelay: `${index * 50}ms` }} />)}
+                                </div>
+                                {searchMode !== 'bulk' && <PaginationControls currentPage={currentPage} onPageChange={changePage} />}
+                            </>
+                        ) : (
+                             <div className="text-center py-16 text-gray-500 dark:text-gray-500 mt-8 bg-white dark:bg-gray-800/50 rounded-xl">
+                                  <h3 className="text-xl font-semibold mt-4 text-gray-700 dark:text-gray-300">No Results Found</h3>
+                                  <p className="text-gray-500 dark:text-gray-400">Try adjusting your filters or search terms.</p>
+                             </div>
+                        )}
+                        {selectedItem && <ItemModal item={selectedItem} onClose={() => setSelectedItem(null)} />}
+                    </div>
+                </div>
+            );
+        }
+
+        function FilterSidePanel({ allBrands, activeFilters, onFilterChange, initialBrandsLoaded }) {
+            const [brandSearch, setBrandSearch] = useState('');
+
+            const handleBrandChange = (brand) => {
+                onFilterChange({ brand: brand });
+            };
+
+            const handleTagChange = (tag) => {
+                const newTags = { ...activeFilters.tags, [tag]: !activeFilters.tags[tag] };
+                onFilterChange({ tags: newTags });
+            };
+
+            const filteredBrands = useMemo(() => {
+                if (!brandSearch) return allBrands;
+                return allBrands.filter(brand => 
+                    brand.toLowerCase().includes(brandSearch.toLowerCase())
+                );
+            }, [brandSearch, allBrands]);
+
+            return (
+                <div className="bg-white/70 dark:bg-gray-800/60 backdrop-blur-lg p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 sticky top-24 h-[calc(100vh-8rem)] flex flex-col">
+                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Filters</h3>
+
+                   {/* Tags Filter */}
+                   <div className="pb-4 border-b border-gray-200 dark:border-gray-700">
+                       <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Tags</h4>
+                       <div className="space-y-2">
+                           <label className="flex items-center space-x-2 cursor-pointer">
+                               <input 
+                                   type="checkbox" 
+                                   checked={activeFilters.tags.specialPricing}
+                                   onChange={() => handleTagChange('specialPricing')}
+                                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                               />
+                               <span className="text-sm">Special Pricing</span>
+                           </label>
+                           {/* Add New Arrivals and Best Sellers checkboxes here when ready */}
+                       </div>
+                   </div>
+
+                   {/* Brands Filter */}
+                   <div className="flex-grow flex flex-col min-h-0 pt-4">
+                       <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Brands</h4>
+                       <div className="mb-2">
+                           <input 
+                               type="text" 
+                               value={brandSearch} 
+                               onChange={e => setBrandSearch(e.target.value)} 
+                               placeholder="Search brands..." 
+                               className="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
+                           />
+                       </div>
+                       <div className="flex-grow overflow-y-auto space-y-1 filter-scrollbar pr-2">
+                           {!initialBrandsLoaded && <div>Loading brands...</div>}
+                           {initialBrandsLoaded && (
+                               <>
+                                   <button onClick={() => handleBrandChange('All Brands')} className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${activeFilters.brand === 'All Brands' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}>
+                                       All Brands
+                                   </button>
+                                   {filteredBrands.map(brand => (
+                                       <button key={brand} onClick={() => handleBrandChange(brand)} className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors truncate ${activeFilters.brand === brand ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}>
+                                           {brand}
+                                       </button>
+                                   ))}
+                               </>
+                           )}
+                       </div>
+                   </div>
                 </div>
             );
         }
         
-        function SearchControls({ onSearch, onBrowseAll, onBulkSearch }) {
+        function SearchControls({ onSearch, onBulkSearch, onBrowseAll, sortBy, setSortBy, sortDirection, onSortDirectionChange }) {
             const [searchTerm, setSearchTerm] = useState('');
             const [searchType, setSearchType] = useState('upc');
             const [upcList, setUpcList] = useState('');
@@ -661,45 +818,60 @@
                 const upcs = upcList.split(/[\n,]/);
                 onBulkSearch(upcs);
             };
-
+            
             return (
                 <div className="bg-white/70 dark:bg-gray-800/60 backdrop-blur-lg p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-8">
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                        <div className="md:col-span-2">
+                    <div className="grid grid-cols-1 md:grid-cols-10 gap-4 items-end">
+                        <div className="md:col-span-3">
                             <label htmlFor="search-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search Term</label>
                             <input type="text" id="search-input" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Enter UPC, Item Name, etc." className="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5" />
                         </div>
-                        <div>
+                        <div className="md:col-span-2">
                             <label htmlFor="search-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search By</label>
                             <select id="search-type" value={searchType} onChange={e => setSearchType(e.target.value)} className="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5">
                                 <option value="upc">UPC</option>
                                 <option value="itemName_lowercase">Item Name</option>
-                                <option value="brand">Brand</option>
                                 <option value="sku">SKU</option>
                             </select>
                         </div>
-                        <div className="md:col-span-2 flex items-center space-x-3">
+                         <div className="md:col-span-2">
+                            <label htmlFor="sort-by" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sort By</label>
+                             <div className="flex">
+                                <select id="sort-by" value={sortBy} onChange={e => setSortBy(e.target.value)} className="block w-full rounded-l-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5">
+                                    <option value="sku">SKU</option>
+                                    <option value="itemName_lowercase">Item Name</option>
+                                    <option value="brand">Brand</option>
+                                    <option value="upc">UPC</option>
+                                    <option value="askingPrice">Price</option>
+                                    <option value="availableInventory">Inventory</option>
+                                </select>
+                                <button onClick={onSortDirectionChange} className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-r-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                                    {sortDirection === 'asc' ? '▲' : '▼'}
+                                </button>
+                             </div>
+                        </div>
+                        <div className="md:col-span-3 flex items-center space-x-3">
                             <button onClick={handleSearchClick} className="w-full inline-flex justify-center rounded-lg border border-transparent bg-indigo-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 transition-all">Search</button>
-                            <button onClick={onBrowseAll} className="w-full inline-flex justify-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 py-2.5 px-4 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-600 transition-all">Browse All</button>
+                            <button onClick={onBrowseAll} className="w-full inline-flex justify-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 py-2.5 px-4 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-100 dark:hover:bg-gray-600 transition-all">Clear Filters</button>
                         </div>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <label htmlFor="upc-list-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bulk UPC Search</label>
-                        <textarea 
-                            id="upc-list-input" 
-                            rows="4" 
-                            value={upcList}
-                            onChange={e => setUpcList(e.target.value)}
-                            className="mt-1 block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" 
-                            placeholder="Paste a list of UPCs, one per line or separated by commas (up to 300)"
-                        ></textarea>
-                        <button 
-                            onClick={handleBulkSearchClick} 
-                            className="mt-2 w-full inline-flex justify-center rounded-lg border border-transparent bg-teal-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors"
-                        >
-                            Search UPC List
-                        </button>
-                    </div>
+                     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                         <label htmlFor="upc-list-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Bulk UPC Search</label>
+                         <textarea 
+                             id="upc-list-input" 
+                             rows="4" 
+                             value={upcList}
+                             onChange={e => setUpcList(e.target.value)}
+                             className="mt-1 block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2" 
+                             placeholder="Paste a list of UPCs, one per line or separated by commas (up to 300)"
+                         ></textarea>
+                         <button 
+                             onClick={handleBulkSearchClick} 
+                             className="mt-2 w-full inline-flex justify-center rounded-lg border border-transparent bg-teal-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 transition-colors"
+                         >
+                             Search UPC List
+                         </button>
+                     </div>
                 </div>
             );
         }
@@ -709,7 +881,12 @@
             const priceText = !isNaN(price) && price >= 0 ? '$' + price.toFixed(2) : 'N/A';
             const placeholderImg = 'https://i.imgur.com/IUBzxFv.jpeg';
             return (
-                <div onClick={onCardClick} className="result-card bg-white dark:bg-gray-800/80 rounded-xl shadow-lg overflow-hidden flex flex-col border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 hover:scale-[1.03] transition-all duration-300" style={style}>
+                <div onClick={onCardClick} className="result-card bg-white dark:bg-gray-800/80 rounded-xl shadow-lg overflow-hidden flex flex-col border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 hover:scale-[1.03] transition-all duration-300 relative" style={style}>
+                    {item.specialPricingTag && (
+                        <div className="absolute top-0 left-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-br-lg rounded-tl-xl z-10">
+                            Special Price
+                        </div>
+                    )}
                     <div className="w-full h-48 bg-white flex items-center justify-center p-2">
                         <img src={item.imageUrl || placeholderImg} alt={item.itemName} className="w-full h-full object-contain" onError={(e) => e.target.src=placeholderImg} />
                     </div>
@@ -814,7 +991,7 @@
             );
         }
 
-        // --- API Docs Component ---
+        // --- API Docs Component (omitted for brevity, same as original) ---
         function ApiDocs() {
             const API_URL = "https://wholesale-api-421345206834.us-central1.run.app";
 
@@ -880,13 +1057,13 @@
                     <pre className="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700"><code>
 {`# Get page 2 with 50 items per page
 curl -L -X GET "${API_URL}?page=2&limit=50" \\
-     -H "Authorization: Bearer YOUR_API_KEY"`}
+      -H "Authorization: Bearer YOUR_API_KEY"`}
                     </code></pre>
                 </div>
             );
         }
 
-        // --- API Key Manager Component ---
+        // --- API Key Manager Component (omitted for brevity, same as original) ---
         function ApiKeyManager({ user }) {
             const [apiKey, setApiKey] = useState(null);
             const [loading, setLoading] = useState(true);
@@ -981,34 +1158,34 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
                                 </button>
                             </div>
                              <div className="mt-6">
-                                 <h3 className="text-lg font-medium text-gray-900 dark:text-white">Usage (Last 24 Hours)</h3>
-                                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-2">
-                                     <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${(usage.count / usage.limit) * 100}%` }}></div>
-                                 </div>
-                                 <p className="text-right text-sm text-gray-500 dark:text-gray-400 mt-1">{usage.count} / {usage.limit} calls</p>
-                             </div>
+                                  <h3 className="text-lg font-medium text-gray-900 dark:text-white">Usage (Last 24 Hours)</h3>
+                                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 mt-2">
+                                      <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${(usage.count / usage.limit) * 100}%` }}></div>
+                                  </div>
+                                  <p className="text-right text-sm text-gray-500 dark:text-gray-400 mt-1">{usage.count} / {usage.limit} calls</p>
+                              </div>
 
-                             <div className="mt-6">
-                                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Recent API Calls</h3>
-                                 {logs.length > 0 ? (
-                                     <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                                         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                             <thead className="bg-gray-50 dark:bg-gray-900/50">
-                                                 <tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Timestamp</th></tr>
-                                             </thead>
-                                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                                 {logs.map((log, index) => (
-                                                     <tr key={index}>
-                                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{new Date(log.timestamp.seconds * 1000).toLocaleString()}</td>
-                                                     </tr>
-                                                 ))}
-                                             </tbody>
-                                         </table>
-                                     </div>
-                                 ) : (
-                                     <p className="text-gray-500 dark:text-gray-500 text-sm">No recent API calls in the last 24 hours.</p>
-                                 )}
-                             </div>
+                              <div className="mt-6">
+                                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Recent API Calls</h3>
+                                  {logs.length > 0 ? (
+                                      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                                          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                              <thead className="bg-gray-50 dark:bg-gray-900/50">
+                                                  <tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Timestamp</th></tr>
+                                              </thead>
+                                              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                  {logs.map((log, index) => (
+                                                      <tr key={index}>
+                                                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{new Date(log.timestamp.seconds * 1000).toLocaleString()}</td>
+                                                      </tr>
+                                                  ))}
+                                              </tbody>
+                                          </table>
+                                      </div>
+                                  ) : (
+                                      <p className="text-gray-500 dark:text-gray-500 text-sm">No recent API calls in the last 24 hours.</p>
+                                  )}
+                              </div>
                             <div className="bg-yellow-100/50 dark:bg-yellow-900/50 border border-yellow-400 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300 text-sm rounded-md p-3 mt-6">
                                 <strong>Warning:</strong> If you generate a new key, your old key will be immediately revoked. Ensure you update any applications using the old key.
                             </div>
@@ -1031,3 +1208,4 @@ curl -L -X GET "${API_URL}?page=2&limit=50" \\
     </script>
 </body>
 </html>
+

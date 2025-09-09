@@ -422,6 +422,13 @@
                 </div>
             );
         }
+        
+        const tagColorMap = {
+            'Special Pricing': 'bg-red-500 text-white',
+            'New Arrival': 'bg-blue-500 text-white',
+            'Best Seller': 'bg-yellow-400 text-yellow-900',
+            'Holiday Promo': 'bg-green-500 text-white'
+        };
 
         // --- Product Database Component ---
         function ProductDatabase() {
@@ -440,7 +447,12 @@
             const [activeFilters, setActiveFilters] = useState({
                 brand: 'All Brands',
                 search: { term: '', type: 'upc' },
-                tags: { specialPricing: false }
+                tags: {
+                    'Special Pricing': false,
+                    'New Arrival': false,
+                    'Best Seller': false,
+                    'Holiday Promo': false,
+                }
             });
             const [sortBy, setSortBy] = useState('brand');
             const [sortDirection, setSortDirection] = useState('asc');
@@ -457,39 +469,39 @@
                 let query = productsCollection;
 
                 // --- Query Construction ---
+                const selectedTags = Object.entries(activeFilters.tags)
+                    .filter(([, value]) => value)
+                    .map(([key]) => key);
 
-                // ** 1. Filtering **
-                // Apply simple equality filters first. These are efficient.
+                if (selectedTags.length > 0) {
+                    query = query.where('specialTag', 'in', selectedTags);
+                }
+
                 if (activeFilters.brand && activeFilters.brand !== 'All Brands') {
                     query = query.where('brand', '==', activeFilters.brand);
                 }
-                if (activeFilters.tags.specialPricing) {
-                    query = query.where('specialPricingTag', '==', true);
-                }
                 
-                // Handle text search, which uses a range filter.
                 const isNameSearch = activeFilters.search.term && activeFilters.search.type === 'itemName_lowercase';
                 if (isNameSearch) {
                      query = query.where('itemName_lowercase', '>=', activeFilters.search.term.toLowerCase());
                      query = query.where('itemName_lowercase', '<=', activeFilters.search.term.toLowerCase() + '\uf8ff');
                 } else if (activeFilters.search.term) {
-                     // Handle equality search for UPC, SKU etc.
                      query = query.where(activeFilters.search.type, '==', activeFilters.search.term);
                 }
 
-                // ** 2. Sorting **
-                // Firestore requires the first orderBy to match the field used in a range filter.
-                // If we are doing a name search, we MUST sort by name first.
                 const primaryOrderByField = isNameSearch ? 'itemName_lowercase' : sortBy;
+                
+                // Firestore doesn't allow inequality filter on a different field than the first orderBy.
+                // If we have an `in` filter, we can't have another inequality. So we sort by the tag field first if it's active.
+                if (selectedTags.length > 0) {
+                    query = query.orderBy('specialTag');
+                }
                 query = query.orderBy(primaryOrderByField, sortDirection);
 
-                // Add a secondary sort field to ensure consistent ordering for items with the same value.
-                // This is crucial for stable pagination.
                 if (primaryOrderByField !== 'sku') {
                     query = query.orderBy('sku', 'asc');
                 }
 
-                // ** 3. Pagination **
                 query = query.limit(ITEMS_PER_PAGE);
                 if (direction === 'next' && !isNewQuery && lastVisibleDoc) {
                     query = query.startAfter(lastVisibleDoc);
@@ -497,21 +509,23 @@
                     query = query.endBefore(firstVisibleDoc).limitToLast(ITEMS_PER_PAGE);
                 }
 
-                // --- Execution ---
                 try {
                     const snapshot = await query.get();
                     const newItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
                     if (snapshot.empty && isNewQuery) {
                         setItems([]);
-                    } else {
+                    } else if (newItems.length > 0) {
                         setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
                         setFirstVisibleDoc(snapshot.docs[0]);
                         setItems(newItems);
+                    } else if (!isNewQuery) {
+                        // Reached end or beginning
+                    } else {
+                        setItems([]);
                     }
                     
-                    // PERFORMANCE OPTIMIZATION: Populate brand list from the first batch of results.
-                    if (!initialBrandsLoaded && newItems.length > 0) {
+                    if (!initialBrandsLoaded) {
                         const brandsSnapshot = await productsCollection.orderBy('brand').get();
                         const brands = new Set();
                         brandsSnapshot.forEach(doc => {
@@ -538,12 +552,16 @@
 
             const handleFilterChange = (newFilters) => {
                 setSearchMode('browse');
+                setLastVisibleDoc(null);
+                setFirstVisibleDoc(null);
                 setActiveFilters(prev => ({...prev, ...newFilters}));
                 setCurrentPage(1);
             };
             
             const handleSearch = (searchTerm, searchType) => {
                 setSearchMode('search');
+                setLastVisibleDoc(null);
+                setFirstVisibleDoc(null);
                 setActiveFilters(prev => ({ ...prev, search: { term: searchTerm, type: searchType } }));
                 setCurrentPage(1);
             };
@@ -590,16 +608,33 @@
                  }
             };
             
+            const handleSortChange = (e) => {
+                setSortBy(e.target.value);
+                setLastVisibleDoc(null);
+                setFirstVisibleDoc(null);
+                setCurrentPage(1);
+            };
+
             const handleSortDirection = () => {
                 setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                setLastVisibleDoc(null);
+                setFirstVisibleDoc(null);
+                setCurrentPage(1);
             };
 
             const handleBrowseAll = () => {
                 setSearchMode('browse');
+                setLastVisibleDoc(null);
+                setFirstVisibleDoc(null);
                 setActiveFilters({
                     brand: 'All Brands',
                     search: { term: '', type: 'upc' },
-                    tags: { specialPricing: false }
+                    tags: {
+                        'Special Pricing': false,
+                        'New Arrival': false,
+                        'Best Seller': false,
+                        'Holiday Promo': false,
+                    }
                 });
                 setSortBy('brand');
                 setSortDirection('asc');
@@ -607,7 +642,7 @@
             };
 
             const triggerCsvDownload = (dataToExport) => {
-                const headers = ["SKU", "UPC", "Item Name", "Brand", "Available Inventory", "Asking Price", "Image URL"];
+                const headers = ["SKU", "UPC", "Item Name", "Brand", "Available Inventory", "Asking Price", "Image URL", "Tag"];
                 const rows = dataToExport.map(item => [
                     item.sku,
                     `="${item.upc}"`,
@@ -615,7 +650,8 @@
                     item.brand,
                     item.availableInventory,
                     item.askingPrice,
-                    item.imageUrl || ''
+                    item.imageUrl || '',
+                    item.specialTag || ''
                 ]);
 
                 const escapeCell = (cell) => {
@@ -686,7 +722,7 @@
                             onBulkSearch={handleBulkSearch}
                             onBrowseAll={handleBrowseAll}
                             sortBy={sortBy}
-                            setSortBy={setSortBy}
+                            setSortBy={handleSortChange}
                             sortDirection={sortDirection}
                             onSortDirectionChange={handleSortDirection}
                         />
@@ -718,7 +754,7 @@
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
                                     {items.map((item, index) => <ItemCard key={item.id} item={item} onCardClick={() => setSelectedItem(item)} style={{ animationDelay: `${index * 50}ms` }} />)}
                                 </div>
-                                {searchMode !== 'bulk' && <PaginationControls currentPage={currentPage} onPageChange={changePage} />}
+                                {searchMode !== 'bulk' && <PaginationControls currentPage={currentPage} onPageChange={changePage} itemsOnPage={items.length} />}
                             </>
                         ) : (
                              <div className="text-center py-16 text-gray-500 dark:text-gray-500 mt-8 bg-white dark:bg-gray-800/50 rounded-xl">
@@ -735,12 +771,19 @@
         function FilterSidePanel({ allBrands, activeFilters, onFilterChange, initialBrandsLoaded }) {
             const [brandSearch, setBrandSearch] = useState('');
 
+            const tagFilters = [
+                { label: 'Special Pricing', value: 'Special Pricing' },
+                { label: 'New Arrival', value: 'New Arrival' },
+                { label: 'Best Seller', value: 'Best Seller' },
+                { label: 'Holiday Sale', value: 'Holiday Promo' }
+            ];
+
             const handleBrandChange = (brand) => {
                 onFilterChange({ brand: brand });
             };
 
-            const handleTagChange = (tag) => {
-                const newTags = { ...activeFilters.tags, [tag]: !activeFilters.tags[tag] };
+            const handleTagChange = (tagValue) => {
+                const newTags = { ...activeFilters.tags, [tagValue]: !activeFilters.tags[tagValue] };
                 onFilterChange({ tags: newTags });
             };
 
@@ -759,16 +802,17 @@
                    <div className="pb-4 border-b border-gray-200 dark:border-gray-700">
                        <h4 className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Tags</h4>
                        <div className="space-y-2">
-                           <label className="flex items-center space-x-2 cursor-pointer">
-                               <input 
-                                   type="checkbox" 
-                                   checked={activeFilters.tags.specialPricing}
-                                   onChange={() => handleTagChange('specialPricing')}
-                                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                               />
-                               <span className="text-sm">Special Pricing</span>
-                           </label>
-                           {/* Add New Arrivals and Best Sellers checkboxes here when ready */}
+                           {tagFilters.map(tag => (
+                                <label key={tag.value} className="flex items-center space-x-2 cursor-pointer">
+                                   <input 
+                                       type="checkbox" 
+                                       checked={activeFilters.tags[tag.value] || false}
+                                       onChange={() => handleTagChange(tag.value)}
+                                       className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                   />
+                                   <span className="text-sm">{tag.label}</span>
+                               </label>
+                           ))}
                        </div>
                    </div>
 
@@ -785,7 +829,7 @@
                            />
                        </div>
                        <div className="flex-grow overflow-y-auto space-y-1 filter-scrollbar pr-2">
-                           {!initialBrandsLoaded && <div>Loading brands...</div>}
+                           {!initialBrandsLoaded && <div className="text-sm text-gray-500">Loading brands...</div>}
                            {initialBrandsLoaded && (
                                <>
                                    <button onClick={() => handleBrandChange('All Brands')} className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${activeFilters.brand === 'All Brands' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}>
@@ -837,10 +881,10 @@
                          <div className="md:col-span-2">
                             <label htmlFor="sort-by" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sort By</label>
                              <div className="flex">
-                                <select id="sort-by" value={sortBy} onChange={e => setSortBy(e.target.value)} className="block w-full rounded-l-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5">
-                                    <option value="sku">SKU</option>
-                                    <option value="itemName_lowercase">Item Name</option>
+                                <select id="sort-by" value={sortBy} onChange={setSortBy} className="block w-full rounded-l-lg border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5">
                                     <option value="brand">Brand</option>
+                                    <option value="itemName_lowercase">Item Name</option>
+                                    <option value="sku">SKU</option>
                                     <option value="upc">UPC</option>
                                     <option value="askingPrice">Price</option>
                                     <option value="availableInventory">Inventory</option>
@@ -880,11 +924,13 @@
             const price = parseFloat(item.askingPrice);
             const priceText = !isNaN(price) && price >= 0 ? '$' + price.toFixed(2) : 'N/A';
             const placeholderImg = 'https://i.imgur.com/IUBzxFv.jpeg';
+            const tagColor = item.specialTag ? tagColorMap[item.specialTag] || 'bg-gray-500 text-white' : '';
+
             return (
                 <div onClick={onCardClick} className="result-card bg-white dark:bg-gray-800/80 rounded-xl shadow-lg overflow-hidden flex flex-col border border-gray-200 dark:border-gray-700 cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 hover:scale-[1.03] transition-all duration-300 relative" style={style}>
-                    {item.specialPricingTag && (
-                        <div className="absolute top-0 left-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-br-lg rounded-tl-xl z-10">
-                            Special Price
+                    {item.specialTag && (
+                        <div className={`absolute top-0 left-0 ${tagColor} text-xs font-bold px-3 py-1 rounded-br-lg rounded-tl-xl z-10`}>
+                            {item.specialTag}
                         </div>
                     )}
                     <div className="w-full h-48 bg-white flex items-center justify-center p-2">
@@ -903,12 +949,12 @@
             );
         }
         
-        function PaginationControls({ currentPage, onPageChange }) {
+        function PaginationControls({ currentPage, onPageChange, itemsOnPage }) {
             return (
                 <div className="mt-10 flex justify-center items-center space-x-2">
                     <button onClick={() => onPageChange('prev')} disabled={currentPage === 1} className="px-3 py-1 rounded-md text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-gray-300 dark:border-gray-600">&laquo; Prev</button>
                     <span className="px-3 py-1 text-sm text-gray-500 dark:text-gray-400">Page {currentPage}</span>
-                    <button onClick={() => onPageChange('next')} className="px-3 py-1 rounded-md text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors border border-gray-300 dark:border-gray-600">Next &raquo;</button>
+                    <button onClick={() => onPageChange('next')} disabled={itemsOnPage < 100} className="px-3 py-1 rounded-md text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-gray-300 dark:border-gray-600">Next &raquo;</button>
                 </div>
             );
         }
@@ -929,6 +975,8 @@
             const msrpText = !isNaN(msrp) && msrp >= 0 ? '$' + msrp.toFixed(2) : null;
             const placeholderImg = 'https://i.imgur.com/IUBzxFv.jpeg';
             const imageUrl = item.imageUrl || placeholderImg;
+            const tagColor = item.specialTag ? tagColorMap[item.specialTag] || 'bg-gray-500 text-white' : '';
+
 
             useEffect(() => {
                 const handleEsc = (event) => {
@@ -953,6 +1001,11 @@
                                         </div>
                                     </div>
                                     <div className="md:col-span-2">
+                                        {item.specialTag && (
+                                            <div className={`inline-block ${tagColor} text-xs font-bold px-3 py-1 rounded-full mb-2`}>
+                                                {item.specialTag}
+                                            </div>
+                                        )}
                                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{item.itemName || 'N/A'}</h2>
                                         {item.brand && <p className="text-md text-gray-500 dark:text-gray-400 mb-4">by {item.brand}</p>}
                                         <div className="bg-gray-100/50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4">

@@ -465,7 +465,6 @@
                 const fetchAllBrands = async () => {
                     if (!appId) return;
                     try {
-                        // TROUBLESHOOT FIX: The path was incorrect. It's now updated to match the user's database structure.
                         const brandsDocRef = db.collection('artifacts').doc(appId).collection('public').doc('brandsList');
                         const brandsDoc = await brandsDocRef.get();
                         
@@ -511,10 +510,24 @@
                 
                 const isNameSearch = activeFilters.search.term && activeFilters.search.type === 'itemName_lowercase';
                 if (isNameSearch) {
-                     query = query.where('itemName_lowercase', '>=', activeFilters.search.term.toLowerCase());
-                     query = query.where('itemName_lowercase', '<=', activeFilters.search.term.toLowerCase() + '\uf8ff');
+                    query = query.where('itemName_lowercase', '>=', activeFilters.search.term.toLowerCase());
+                    query = query.where('itemName_lowercase', '<=', activeFilters.search.term.toLowerCase() + '\uf8ff');
                 } else if (activeFilters.search.term) {
-                     query = query.where(activeFilters.search.type, '==', activeFilters.search.term);
+                    if (activeFilters.search.type === 'upc') {
+                        const term = activeFilters.search.term;
+                        // Create a set of possible UPCs to search for, handling leading zeros.
+                        const possibleUpcs = new Set([term]);
+                        // Add version with any leading zeros stripped (e.g., "0123" -> "123")
+                        possibleUpcs.add(term.replace(/^0+/, ''));
+                        // Add version with one leading zero added, in case the DB stores it that way (e.g., "123" -> "0123")
+                        if (!term.startsWith('0')) {
+                            possibleUpcs.add('0' + term);
+                        }
+                        query = query.where('upc', 'in', [...possibleUpcs]);
+                    } else {
+                        // This handles 'sku' search
+                        query = query.where(activeFilters.search.type, '==', activeFilters.search.term);
+                    }
                 }
 
                 const primaryOrderByField = isNameSearch ? 'itemName_lowercase' : sortBy;
@@ -583,45 +596,57 @@
             };
 
             const handleBulkSearch = async (upcs) => {
-                 const upcList = [...new Set(upcs.map(upc => upc.trim()).filter(upc => upc))];
-                 if (upcList.length === 0) return;
-                 if (upcList.length > 300) {
-                     setError("Bulk search is limited to 300 UPCs at a time.");
-                     return;
-                 }
+                const upcsToProcess = [...new Set(upcs.map(upc => upc.trim()).filter(upc => upc))];
+                if (upcsToProcess.length === 0) return;
 
-                 setLoading(true);
-                 setSearchMode('bulk');
-                 setError('');
-                 setCurrentPage(1);
-                 
-                 try {
-                     const chunks = [];
-                     for (let i = 0; i < upcList.length; i += 10) {
-                         chunks.push(upcList.slice(i, i + 10));
-                     }
+                // Expand the list to include variations with/without leading zeros
+                const expandedUpcs = new Set();
+                upcsToProcess.forEach(upc => {
+                    expandedUpcs.add(upc);
+                    expandedUpcs.add(upc.replace(/^0+/, ''));
+                    if (!upc.startsWith('0')) {
+                        expandedUpcs.add('0' + upc);
+                    }
+                });
+                const upcList = [...expandedUpcs];
 
-                     const queryPromises = chunks.map(chunk => 
-                         productsCollection.where('upc', 'in', chunk).get()
-                     );
-                     
-                     const querySnapshots = await Promise.all(queryPromises);
-                     
-                     const allDocs = [];
-                     querySnapshots.forEach(snapshot => {
-                         snapshot.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
-                     });
-                     
-                     const sortedDocs = allDocs.sort((a, b) => a.sku.localeCompare(b.sku));
-                     setItems(sortedDocs);
+                if (upcList.length > 300) {
+                    setError("Bulk search is limited to 300 unique UPCs at a time. Your list expanded to " + upcList.length + " variations to check for leading zeros.");
+                    return;
+                }
 
-                 } catch (err) {
-                     console.error("Firestore bulk query failed:", err);
-                     setError("Could not fetch data for bulk search. " + err.message);
-                     setItems([]);
-                 } finally {
-                     setLoading(false);
-                 }
+                setLoading(true);
+                setSearchMode('bulk');
+                setError('');
+                setCurrentPage(1);
+                
+                try {
+                    const chunks = [];
+                    for (let i = 0; i < upcList.length; i += 10) {
+                        chunks.push(upcList.slice(i, i + 10));
+                    }
+
+                    const queryPromises = chunks.map(chunk => 
+                        productsCollection.where('upc', 'in', chunk).get()
+                    );
+                    
+                    const querySnapshots = await Promise.all(queryPromises);
+                    
+                    const allDocs = [];
+                    querySnapshots.forEach(snapshot => {
+                        snapshot.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
+                    });
+                    
+                    const sortedDocs = allDocs.sort((a, b) => a.sku.localeCompare(b.sku));
+                    setItems(sortedDocs);
+
+                } catch (err) {
+                    console.error("Firestore bulk query failed:", err);
+                    setError("Could not fetch data for bulk search. " + err.message);
+                    setItems([]);
+                } finally {
+                    setLoading(false);
+                }
             };
             
             const handleSortChange = (e) => {

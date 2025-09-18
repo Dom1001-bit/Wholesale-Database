@@ -441,6 +441,7 @@
             const [selectedItem, setSelectedItem] = useState(null);
             const [exportLoading, setExportLoading] = useState(false);
             const [searchMode, setSearchMode] = useState('browse');
+            const [lastFetchCount, setLastFetchCount] = useState(0);
             
             const [allBrands, setAllBrands] = useState([]);
             const [initialBrandsLoaded, setInitialBrandsLoaded] = useState(false);
@@ -459,6 +460,13 @@
 
             const ITEMS_PER_PAGE = 100;
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+            // Helper function to determine if an item should be visible
+            const isItemVisible = (item) => {
+                const hasImage = item.imageUrl && item.imageUrl.trim() !== '';
+                const hasInventory = item.availableInventory && Number(item.availableInventory) > 0;
+                return hasImage && hasInventory;
+            };
 
             // OPTIMIZED: Fetch brands from the dedicated document
             useEffect(() => {
@@ -515,17 +523,12 @@
                 } else if (activeFilters.search.term) {
                     if (activeFilters.search.type === 'upc') {
                         const term = activeFilters.search.term;
-                        // Create a set of possible UPCs to search for, handling leading zeros.
-                        const possibleUpcs = new Set([term]);
-                        // Add version with any leading zeros stripped (e.g., "0123" -> "123")
-                        possibleUpcs.add(term.replace(/^0+/, ''));
-                        // Add version with one leading zero added, in case the DB stores it that way (e.g., "123" -> "0123")
+                        const possibleUpcs = new Set([term, term.replace(/^0+/, '')]);
                         if (!term.startsWith('0')) {
                             possibleUpcs.add('0' + term);
                         }
                         query = query.where('upc', 'in', [...possibleUpcs]);
                     } else {
-                        // This handles 'sku' search
                         query = query.where(activeFilters.search.type, '==', activeFilters.search.term);
                     }
                 }
@@ -550,16 +553,19 @@
 
                 try {
                     const snapshot = await query.get();
-                    const newItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setLastFetchCount(snapshot.docs.length);
+
+                    const fetchedItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const newItems = fetchedItems.filter(isItemVisible);
 
                     if (snapshot.empty && isNewQuery) {
                         setItems([]);
-                    } else if (newItems.length > 0) {
+                    } else if (fetchedItems.length > 0) {
                         setLastVisibleDoc(snapshot.docs[snapshot.docs.length - 1]);
                         setFirstVisibleDoc(snapshot.docs[0]);
                         setItems(newItems);
                     } else if (!isNewQuery) {
-                       // End of pages
+                       setItems([]);
                     } else {
                         setItems([]);
                     }
@@ -599,7 +605,6 @@
                 const upcsToProcess = [...new Set(upcs.map(upc => upc.trim()).filter(upc => upc))];
                 if (upcsToProcess.length === 0) return;
 
-                // Expand the list to include variations with/without leading zeros
                 const expandedUpcs = new Set();
                 upcsToProcess.forEach(upc => {
                     expandedUpcs.add(upc);
@@ -637,7 +642,8 @@
                         snapshot.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
                     });
                     
-                    const sortedDocs = allDocs.sort((a, b) => a.sku.localeCompare(b.sku));
+                    const filteredDocs = allDocs.filter(isItemVisible);
+                    const sortedDocs = filteredDocs.sort((a, b) => a.sku.localeCompare(b.sku));
                     setItems(sortedDocs);
 
                 } catch (err) {
@@ -733,7 +739,10 @@
                     const allDocs = [];
                     const snapshot = await productsCollection.get();
                     snapshot.forEach(doc => allDocs.push(doc.data()));
-                    triggerCsvDownload(allDocs);
+
+                    const filteredForExport = allDocs.filter(isItemVisible);
+
+                    triggerCsvDownload(filteredForExport);
                 } catch (err) {
                     console.error("Full export failed:", err);
                     setError("Could not export the full catalog.");
@@ -795,7 +804,7 @@
                                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
                                     {items.map((item, index) => <ItemCard key={item.id} item={item} onCardClick={() => setSelectedItem(item)} style={{ animationDelay: `${index * 50}ms` }} />)}
                                 </div>
-                                {searchMode !== 'bulk' && <PaginationControls currentPage={currentPage} onPageChange={changePage} itemsOnPage={items.length} />}
+                                {searchMode !== 'bulk' && <PaginationControls currentPage={currentPage} onPageChange={changePage} lastFetchCount={lastFetchCount} itemsPerPage={ITEMS_PER_PAGE} />}
                             </>
                         ) : (
                              <div className="text-center py-16 text-gray-500 dark:text-gray-500 mt-8 bg-white dark:bg-gray-800/50 rounded-xl">
@@ -975,7 +984,7 @@
                         </div>
                     )}
                     <div className="w-full h-48 bg-white flex items-center justify-center p-2">
-                        <img src={item.imageUrl || placeholderImg} alt={item.itemName} className="w-full h-full object-contain" onError={(e) => e.target.src=placeholderImg} />
+                        <img loading="lazy" src={item.imageUrl || placeholderImg} alt={item.itemName} className="w-full h-full object-contain" onError={(e) => e.target.src=placeholderImg} />
                     </div>
                     <div className="p-4 flex-grow flex flex-col">
                         <h3 className="text-md font-semibold text-gray-800 dark:text-white truncate" title={item.itemName}>{item.itemName}</h3>
@@ -990,12 +999,12 @@
             );
         }
         
-        function PaginationControls({ currentPage, onPageChange, itemsOnPage }) {
+        function PaginationControls({ currentPage, onPageChange, lastFetchCount, itemsPerPage }) {
             return (
                 <div className="mt-10 flex justify-center items-center space-x-2">
                     <button onClick={() => onPageChange('prev')} disabled={currentPage === 1} className="px-3 py-1 rounded-md text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-gray-300 dark:border-gray-600">&laquo; Prev</button>
                     <span className="px-3 py-1 text-sm text-gray-500 dark:text-gray-400">Page {currentPage}</span>
-                    <button onClick={() => onPageChange('next')} disabled={itemsOnPage < 100} className="px-3 py-1 rounded-md text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-gray-300 dark:border-gray-600">Next &raquo;</button>
+                    <button onClick={() => onPageChange('next')} disabled={lastFetchCount < itemsPerPage} className="px-3 py-1 rounded-md text-sm font-medium bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-gray-300 dark:border-gray-600">Next &raquo;</button>
                 </div>
             );
         }

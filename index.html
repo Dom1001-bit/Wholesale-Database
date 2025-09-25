@@ -443,8 +443,11 @@
             const [searchMode, setSearchMode] = useState('browse');
             const [lastFetchCount, setLastFetchCount] = useState(0);
             
-            const [allBrands, setAllBrands] = useState([]);
-            const [initialBrandsLoaded, setInitialBrandsLoaded] = useState(false);
+            const [categoryBrands, setCategoryBrands] = useState([]);
+            const [brandsLoading, setBrandsLoading] = useState(true);
+            const [activeCategoryTab, setActiveCategoryTab] = useState('Fragrance');
+            const [viewMode, setViewMode] = useState('inStock'); // 'inStock' or 'outOfStock'
+
             const [activeFilters, setActiveFilters] = useState({
                 brand: 'All Brands',
                 search: { term: '', type: 'upc' },
@@ -459,40 +462,66 @@
             const [sortDirection, setSortDirection] = useState('asc');
 
             const ITEMS_PER_PAGE = 100;
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-            // Helper function to determine if an item should be visible
-            const isItemVisible = (item) => {
+            // --- Visibility Logic ---
+            const baseVisibleCheck = (item) => {
                 const hasImage = item.imageUrl && item.imageUrl.trim() !== '';
-                const hasInventory = item.availableInventory && Number(item.availableInventory) > 0;
-                return hasImage && hasInventory;
+                const isNotTester = item.subCategory !== 'Tester';
+                const hasPrice = item.askingPrice && Number(item.askingPrice) >= 15;
+                return hasImage && isNotTester && hasPrice;
             };
 
-            // OPTIMIZED: Fetch brands from the dedicated document
+            const isItemVisible = (item) => {
+                const hasInventory = item.availableInventory && Number(item.availableInventory) > 0;
+                return baseVisibleCheck(item) && hasInventory;
+            };
+
+            const isOOSVisible = (item) => {
+                const isOutOfStock = !item.availableInventory || Number(item.availableInventory) === 0;
+                return baseVisibleCheck(item) && isOutOfStock;
+            }
+
+
+            const handleFilterChange = (newFilters) => {
+                setSearchMode('browse');
+                setLastVisibleDoc(null);
+                setFirstVisibleDoc(null);
+                setActiveFilters(prev => ({...prev, ...newFilters}));
+                setCurrentPage(1);
+            };
+
+            // Effect to dynamically fetch and set brands based on the selected category and view mode
             useEffect(() => {
-                const fetchAllBrands = async () => {
-                    if (!appId) return;
+                const fetchBrandsForCategory = async () => {
+                    if (!activeCategoryTab) return;
+                    setBrandsLoading(true);
+                    // Reset brand filter when category or stock status changes
+                    handleFilterChange({ brand: 'All Brands' });
+
                     try {
-                        const brandsDocRef = db.collection('artifacts').doc(appId).collection('public').doc('brandsList');
-                        const brandsDoc = await brandsDocRef.get();
+                        const q = productsCollection.where('category', '==', activeCategoryTab);
+                        const snapshot = await q.get();
+                        const products = snapshot.docs.map(doc => doc.data());
                         
-                        if (brandsDoc.exists) {
-                            const brandData = brandsDoc.data();
-                            if (brandData && brandData.allBrandNames) {
-                                setAllBrands(brandData.allBrandNames);
-                            }
-                        } else {
-                            console.warn("Brand list document not found. Ensure your sync script is running and creating a document at 'artifacts/{appId}/public/brandsList'.");
-                        }
+                        // Filter products based on the current view mode (in stock or out of stock)
+                        const relevantProducts = viewMode === 'inStock' 
+                            ? products.filter(isItemVisible)
+                            : products.filter(isOOSVisible);
+                        
+                        const uniqueBrands = [...new Set(relevantProducts.map(p => p.brand).filter(Boolean))];
+                        uniqueBrands.sort();
+                        setCategoryBrands(uniqueBrands);
                     } catch (err) {
-                        console.error("Failed to fetch brands list:", err);
-                        setError("Could not load brand filter list. This is likely due to a permissions issue. Please check your Firestore security rules.");
+                        console.error("Failed to fetch brands for category:", err);
+                        setError("Could not load brand filter for the selected category.");
+                        setCategoryBrands([]);
                     } finally {
-                        setInitialBrandsLoaded(true);
+                        setBrandsLoading(false);
                     }
                 };
-                fetchAllBrands();
-            }, [appId]);
+
+                fetchBrandsForCategory();
+            }, [activeCategoryTab, viewMode]);
 
 
             const fetchData = useCallback(async (direction = 'next', pageNum = 1) => {
@@ -503,6 +532,13 @@
                 const isNewQuery = pageNum === 1;
                 
                 let query = productsCollection;
+
+                query = query.where('category', '==', activeCategoryTab);
+                
+                if(viewMode === 'outOfStock') {
+                    query = query.where('availableInventory', '==', 0);
+                }
+
 
                 const selectedTags = Object.entries(activeFilters.tags)
                     .filter(([, value]) => value)
@@ -556,7 +592,10 @@
                     setLastFetchCount(snapshot.docs.length);
 
                     const fetchedItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    const newItems = fetchedItems.filter(isItemVisible);
+                    
+                    const newItems = viewMode === 'inStock' 
+                        ? fetchedItems.filter(isItemVisible) 
+                        : fetchedItems.filter(isOOSVisible);
 
                     if (snapshot.empty && isNewQuery) {
                         setItems([]);
@@ -578,20 +617,13 @@
                 } finally {
                     setLoading(false);
                 }
-            }, [activeFilters, sortBy, sortDirection, lastVisibleDoc, firstVisibleDoc, searchMode]);
+            }, [activeFilters, sortBy, sortDirection, lastVisibleDoc, firstVisibleDoc, searchMode, activeCategoryTab, viewMode]);
 
 
             useEffect(() => {
                 fetchData('next', 1);
-            }, [activeFilters, sortBy, sortDirection]);
+            }, [activeFilters, sortBy, sortDirection, activeCategoryTab, viewMode]);
 
-            const handleFilterChange = (newFilters) => {
-                setSearchMode('browse');
-                setLastVisibleDoc(null);
-                setFirstVisibleDoc(null);
-                setActiveFilters(prev => ({...prev, ...newFilters}));
-                setCurrentPage(1);
-            };
             
             const handleSearch = (searchTerm, searchType) => {
                 setSearchMode('search');
@@ -642,7 +674,8 @@
                         snapshot.forEach(doc => allDocs.push({ id: doc.id, ...doc.data() }));
                     });
                     
-                    const filteredDocs = allDocs.filter(isItemVisible);
+                    // In bulk search, show both in-stock and OOS that match
+                    const filteredDocs = allDocs.filter(p => isItemVisible(p) || isOOSVisible(p));
                     const sortedDocs = filteredDocs.sort((a, b) => a.sku.localeCompare(b.sku));
                     setItems(sortedDocs);
 
@@ -673,6 +706,8 @@
                 setSearchMode('browse');
                 setLastVisibleDoc(null);
                 setFirstVisibleDoc(null);
+                setActiveCategoryTab('Fragrance');
+                setViewMode('inStock');
                 setActiveFilters({
                     brand: 'All Brands',
                     search: { term: '', type: 'upc' },
@@ -737,6 +772,7 @@
                 setExportLoading(true);
                 try {
                     const allDocs = [];
+                    // This exports only visible IN-STOCK items from the entire catalog
                     const snapshot = await productsCollection.get();
                     snapshot.forEach(doc => allDocs.push(doc.data()));
 
@@ -756,14 +792,16 @@
                 fetchData(direction, newPage);
             };
 
+            const categories = ['Fragrance', 'Beauty', 'Gift Set'];
+
             return (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <aside className="lg:col-span-2">
                         <FilterSidePanel 
-                           allBrands={allBrands}
+                           brands={categoryBrands}
+                           isLoading={brandsLoading}
                            activeFilters={activeFilters}
                            onFilterChange={handleFilterChange}
-                           initialBrandsLoaded={initialBrandsLoaded}
                         />
                     </aside>
                     <div className="lg:col-span-10">
@@ -778,6 +816,35 @@
                         />
                         {error && <p className="text-red-500 dark:text-red-400 my-4 p-4 bg-red-100 dark:bg-red-900/50 rounded-lg">{error}</p>}
                         
+                        {/* --- NEW TABS CONTROL BAR --- */}
+                        <div className="bg-white/70 dark:bg-gray-800/60 backdrop-blur-lg p-2 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-6 flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0">
+                            {/* Category Tabs */}
+                            <div className="p-1 bg-gray-200 dark:bg-gray-900/50 rounded-lg flex items-center space-x-1">
+                                {categories.map((cat) => (
+                                     <button
+                                        key={cat}
+                                        onClick={() => setActiveCategoryTab(cat)}
+                                        className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-300 ${
+                                            activeCategoryTab === cat
+                                                ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-300 shadow-sm'
+                                                : 'text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-700/50'
+                                        }`}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
+                            {/* Stock Status Tabs */}
+                            <div className="p-1 bg-gray-200 dark:bg-gray-900/50 rounded-lg flex items-center space-x-1">
+                                <button onClick={() => setViewMode('inStock')} className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-300 ${viewMode === 'inStock' ? 'bg-white dark:bg-gray-700 text-green-600 dark:text-green-400 shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-700/50'}`}>
+                                    In Stock
+                                </button>
+                                <button onClick={() => setViewMode('outOfStock')} className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-300 ${viewMode === 'outOfStock' ? 'bg-white dark:bg-gray-700 text-red-500 dark:text-red-400 shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-700/50'}`}>
+                                    Out-of-Stock
+                                </button>
+                            </div>
+                        </div>
+
                         <div className="flex justify-end mb-4 space-x-2">
                             {items.length > 0 && !loading && (
                                 <button onClick={handleExport} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors">
@@ -818,7 +885,7 @@
             );
         }
 
-        function FilterSidePanel({ allBrands, activeFilters, onFilterChange, initialBrandsLoaded }) {
+        function FilterSidePanel({ brands, isLoading, activeFilters, onFilterChange }) {
             const [brandSearch, setBrandSearch] = useState('');
 
             const tagFilters = [
@@ -838,11 +905,11 @@
             };
 
             const filteredBrands = useMemo(() => {
-                if (!brandSearch) return allBrands;
-                return allBrands.filter(brand => 
+                if (!brandSearch) return brands;
+                return brands.filter(brand => 
                     brand.toLowerCase().includes(brandSearch.toLowerCase())
                 );
-            }, [brandSearch, allBrands]);
+            }, [brandSearch, brands]);
 
             return (
                 <div className="bg-white/70 dark:bg-gray-800/60 backdrop-blur-lg p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 sticky top-24 h-[calc(100vh-8rem)] flex flex-col">
@@ -879,8 +946,8 @@
                            />
                        </div>
                        <div className="flex-grow overflow-y-auto space-y-1 filter-scrollbar pr-2">
-                           {!initialBrandsLoaded && <div className="text-sm text-gray-500">Loading brands...</div>}
-                           {initialBrandsLoaded && (
+                           {isLoading && <div className="text-sm text-gray-500">Loading brands...</div>}
+                           {!isLoading && (
                                <>
                                    <button onClick={() => handleBrandChange('All Brands')} className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-colors ${activeFilters.brand === 'All Brands' ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300' : 'hover:bg-gray-200/50 dark:hover:bg-gray-700/50'}`}>
                                        All Brands
@@ -1083,6 +1150,7 @@
                                             {item.gender && <p><strong className="font-semibold text-gray-700 dark:text-gray-300">Gender:</strong> <span className="text-gray-500 dark:text-gray-400">{item.gender}</span></p>}
                                             {item.type && <p><strong className="font-semibold text-gray-700 dark:text-gray-300">Type:</strong> <span className="text-gray-500 dark:text-gray-400">{item.type}</span></p>}
                                             {item.category && <p><strong className="font-semibold text-gray-700 dark:text-gray-300">Category:</strong> <span className="text-gray-500 dark:text-gray-400">{item.category}</span></p>}
+                                            {item.subCategory && <p><strong className="font-semibold text-gray-700 dark:text-gray-300">Sub-Category:</strong> <span className="text-gray-500 dark:text-gray-400">{item.subCategory}</span></p>}
                                             {item.asin && <p><strong className="font-semibold text-gray-700 dark:text-gray-300">ASIN:</strong> <span className="text-gray-500 dark:text-gray-400 font-mono">{item.asin}</span></p>}
                                         </div>
                                         {item.description && <p className="text-sm text-gray-600 dark:text-gray-400">{item.description}</p>}

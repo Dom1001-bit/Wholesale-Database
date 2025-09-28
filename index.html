@@ -443,7 +443,7 @@
             const [searchMode, setSearchMode] = useState('browse');
             const [lastFetchCount, setLastFetchCount] = useState(0);
             
-            const [categoryBrands, setCategoryBrands] = useState([]);
+            const [categoryMetadata, setCategoryMetadata] = useState(null);
             const [brandsLoading, setBrandsLoading] = useState(true);
             const [activeCategoryTab, setActiveCategoryTab] = useState('Fragrance');
             const [viewMode, setViewMode] = useState('inStock'); // 'inStock' or 'outOfStock'
@@ -462,6 +462,7 @@
             const [sortDirection, setSortDirection] = useState('asc');
 
             const ITEMS_PER_PAGE = 100;
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
             // --- Visibility Logic ---
             const baseVisibleCheck = (item) => {
@@ -481,47 +482,30 @@
                 return baseVisibleCheck(item) && isOutOfStock;
             }
 
-
-            const handleFilterChange = (newFilters) => {
-                setSearchMode('browse');
-                setLastVisibleDoc(null);
-                setFirstVisibleDoc(null);
-                setActiveFilters(prev => ({...prev, ...newFilters}));
-                setCurrentPage(1);
-            };
-
-            // Effect to dynamically fetch and set brands based on the selected category and view mode
+            // --- Data Fetching Hooks ---
             useEffect(() => {
-                const fetchBrandsForCategory = async () => {
-                    if (!activeCategoryTab) return;
+                const fetchMetadata = async () => {
+                    if (!appId) return;
                     setBrandsLoading(true);
-                    // Reset brand filter when category or stock status changes
-                    handleFilterChange({ brand: 'All Brands' });
-
                     try {
-                        const q = productsCollection.where('category', '==', activeCategoryTab);
-                        const snapshot = await q.get();
-                        const products = snapshot.docs.map(doc => doc.data());
+                        const metaDocRef = db.collection('artifacts').doc(appId).collection('public').doc('categoryInfo');
+                        const metaDoc = await metaDocRef.get();
                         
-                        // Filter products based on the current view mode (in stock or out of stock)
-                        const relevantProducts = viewMode === 'inStock' 
-                            ? products.filter(isItemVisible)
-                            : products.filter(isOOSVisible);
-                        
-                        const uniqueBrands = [...new Set(relevantProducts.map(p => p.brand).filter(Boolean))];
-                        uniqueBrands.sort();
-                        setCategoryBrands(uniqueBrands);
+                        if (metaDoc.exists) {
+                            setCategoryMetadata(metaDoc.data().categories);
+                        } else {
+                            setError("Brand metadata not found. Please ensure the backend script has run successfully.");
+                            console.warn(`Document not found at /artifacts/${appId}/public/categoryInfo`);
+                        }
                     } catch (err) {
-                        console.error("Failed to fetch brands for category:", err);
-                        setError("Could not load brand filter for the selected category.");
-                        setCategoryBrands([]);
+                        console.error("Failed to fetch metadata:", err);
+                        setError("Could not load brand filter metadata. Check permissions and document path.");
                     } finally {
                         setBrandsLoading(false);
                     }
                 };
-
-                fetchBrandsForCategory();
-            }, [activeCategoryTab, viewMode]);
+                fetchMetadata();
+            }, [appId]);
 
 
             const fetchData = useCallback(async (direction = 'next', pageNum = 1) => {
@@ -623,7 +607,14 @@
             useEffect(() => {
                 fetchData('next', 1);
             }, [activeFilters, sortBy, sortDirection, activeCategoryTab, viewMode]);
-
+            
+            const handleFilterChange = (newFilters) => {
+                setSearchMode('browse');
+                setLastVisibleDoc(null);
+                setFirstVisibleDoc(null);
+                setActiveFilters(prev => ({...prev, ...newFilters}));
+                setCurrentPage(1);
+            };
             
             const handleSearch = (searchTerm, searchType) => {
                 setSearchMode('search');
@@ -792,13 +783,19 @@
                 fetchData(direction, newPage);
             };
 
-            const categories = ['Fragrance', 'Beauty', 'Gift Sets'];
+            const categories = ['Fragrance', 'Beauty', 'Gift Set'];
+            
+            const displayedBrands = useMemo(() => {
+                if (!categoryMetadata || !activeCategoryTab) return [];
+                const key = viewMode === 'inStock' ? 'inStockBrands' : 'outOfStockBrands';
+                return categoryMetadata[activeCategoryTab]?.[key] || [];
+            }, [categoryMetadata, activeCategoryTab, viewMode]);
 
             return (
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     <aside className="lg:col-span-2">
                         <FilterSidePanel 
-                           brands={categoryBrands}
+                           brands={displayedBrands}
                            isLoading={brandsLoading}
                            activeFilters={activeFilters}
                            onFilterChange={handleFilterChange}
@@ -823,7 +820,10 @@
                                 {categories.map((cat) => (
                                      <button
                                         key={cat}
-                                        onClick={() => setActiveCategoryTab(cat)}
+                                        onClick={() => {
+                                            setActiveCategoryTab(cat);
+                                            setViewMode('inStock'); // Reset to inStock when changing category
+                                        }}
                                         className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all duration-300 ${
                                             activeCategoryTab === cat
                                                 ? 'bg-white dark:bg-gray-700 text-indigo-600 dark:text-indigo-300 shadow-sm'

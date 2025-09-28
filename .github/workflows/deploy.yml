@@ -12,6 +12,11 @@ jobs:
       contents: read
       pages: write
       id-token: write
+    # --- ADD THIS SECTION ---
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # --- END OF ADDED SECTION ---
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
